@@ -24,10 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import java.net.URLDecoder
+import java.net.URLEncoder
 import androidx.preference.PreferenceManager
 import com.winlator.orion.core.ContainerManager
 import com.winlator.orion.ui.screens.*
@@ -194,9 +198,47 @@ fun MainScreen() {
         ) {
             composable("containers") { ContainersScreen() }
             composable("contents") { ContentsScreen() }
-            composable("shortcuts") { ShortcutsScreen() }
+            composable("shortcuts") {
+                ShortcutsScreen(
+                    onLaunchApp = { executable, arguments, title ->
+                        val encodedExec = URLEncoder.encode(executable, "UTF-8")
+                        val encodedArgs = URLEncoder.encode(arguments, "UTF-8")
+                        val encodedTitle = URLEncoder.encode(title, "UTF-8")
+                        navController.navigate("xserver/$encodedExec/$encodedArgs/$encodedTitle")
+                    }
+                )
+            }
             composable("controls") { ControlsScreen() }
             composable("settings") { SettingsScreen() }
+            
+            composable(
+                route = "xserver/{executable}/{arguments}/{title}",
+                arguments = listOf(
+                    navArgument("executable") { type = NavType.StringType },
+                    navArgument("arguments") { type = NavType.StringType },
+                    navArgument("title") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val executable = URLDecoder.decode(
+                    backStackEntry.arguments?.getString("executable") ?: "",
+                    "UTF-8"
+                )
+                val arguments = URLDecoder.decode(
+                    backStackEntry.arguments?.getString("arguments") ?: "",
+                    "UTF-8"
+                )
+                val title = URLDecoder.decode(
+                    backStackEntry.arguments?.getString("title") ?: "",
+                    "UTF-8"
+                )
+                
+                XServerDisplayScreen(
+                    executablePath = executable,
+                    arguments = arguments,
+                    windowTitle = title,
+                    onClose = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
