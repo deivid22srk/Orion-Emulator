@@ -1,0 +1,241 @@
+import java.net.URL
+import java.nio.file.Files
+import java.security.MessageDigest
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+tasks.register("downloadImageFS") {
+    File imageFS = new File("${projectDir}/src/main/assets/imagefs.txz")
+    String imageFSSHA256Sum = "https://gitlab.com/winlator3/winlator-extra/-/raw/main/imagefs/imagefs.txz.sha256sum"
+    int parts = 4
+
+    doLast {
+        if (!imageFS.exists()) {
+            println("ImageFS was not present, downloading...\n")
+            FileOutputStream outputStream = new FileOutputStream(imageFS)
+            for (int i = 0; i < parts; i++) {
+                File partFile = new File(String.format("${projectDir}/src/main/assets/imagefs.txz.%02d", i))
+                String partURL = String.format("https://gitlab.com/winlator3/winlator-extra/-/raw/main/imagefs/imagefs.txz.%02d", i)
+                new URL(partURL).withInputStream { p ->
+                    partFile.withOutputStream { it << p }
+                    outputStream << partFile.bytes
+                }
+                partFile.delete()
+            }
+            outputStream.close()
+        }
+
+        String remoteChecksum = new URL(imageFSSHA256Sum).text.split("\\s+")[0].trim()
+        byte[] data = Files.readAllBytes(imageFS.toPath())
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest(data)
+        String localChecksum = String.format("%064x", new BigInteger(1, hash))
+
+        if (remoteChecksum != localChecksum) {
+            println("The version of ImageFS present locally is older than remote or hasn't been downloaded properly, redownloading...\n")
+            FileOutputStream outputStream = new FileOutputStream(imageFS)
+            for (int i = 0; i < parts; i++) {
+                File partFile = new File(String.format("${projectDir}/src/main/assets/imagefs.txz.%02d", i))
+                String partURL = String.format("https://gitlab.com/winlator3/winlator-extra/-/raw/main/imagefs/imagefs.txz.%02d", i)
+                new URL(partURL).withInputStream { p ->
+                    partFile.withOutputStream { it << p }
+                    outputStream << partFile.bytes
+                }
+                partFile.delete()
+            }
+            outputStream.close()
+        }
+    }
+}
+
+tasks.register("downloadProton") {
+    File protonARM64EC = new File("${projectDir}/src/main/assets/proton-9.0-arm64ec.txz")
+    File protonX8664 = new File("${projectDir}/src/main/assets/proton-9.0-x86_64.txz")
+    String protonARM64ECUrl = "https://gitlab.com/winlator3/winlator-extra/-/raw/main/proton/proton-9.0-arm64ec.txz"
+    String protonARM64ECSHA256Sum = "https://gitlab.com/winlator3/winlator-extra/-/raw/main/proton/proton-9.0-arm64ec.txz.sha256sum"
+    String protonX8664Url = "https://gitlab.com/winlator3/winlator-extra/-/raw/main/proton/proton-9.0-x86_64.txz"
+    String protonX8664SHA256Sum = "https://gitlab.com/winlator3/winlator-extra/-/raw/main/proton/proton-9.0-x86_64.txz.sha256sum"
+
+    ext.checkSHA256Sum = { File file ->
+        byte[] data = Files.readAllBytes(file.toPath())
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest(data)
+        return String.format("%064x", new BigInteger(1, hash))
+    }
+
+    doLast {
+        if (!protonARM64EC.exists()) {
+            println("Proton 9.0 ARM64EC was not present, downloading...\n")
+            new URL(protonARM64ECUrl).withInputStream { i -> protonARM64EC.withOutputStream { it << i } }
+        }
+        if (!protonX8664.exists()) {
+            println("Proton 9.0 x86_64 was not present, downloading...\n")
+            new URL(protonX8664Url).withInputStream { i -> protonX8664.withOutputStream { it << i } }
+        }
+
+        String remoteChecksum = new URL(protonARM64ECSHA256Sum).text.split("\\s+")[0].trim()
+        byte[] data = Files.readAllBytes(protonARM64EC.toPath())
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest(data)
+        String localChecksum = String.format("%064x", new BigInteger(1, hash))
+
+        if (remoteChecksum != localChecksum) {
+            println("The version of Proton 9.0 ARM64EC present locally is older than remote or hasn't been downloaded properly, redownloading...\n")
+            new URL(protonARM64ECUrl).withInputStream { i -> protonARM64EC.withOutputStream { it << i } }
+        }
+
+        remoteChecksum = new URL(protonX8664SHA256Sum).text.split("\\s+")[0].trim()
+        data = Files.readAllBytes(protonX8664.toPath())
+        hash = MessageDigest.getInstance("SHA-256").digest(data)
+        localChecksum = String.format("%064x", new BigInteger(1, hash))
+
+        if (remoteChecksum != localChecksum) {
+            println("The version of Proton 9.0 x86_64 present locally is older than remote or hasn't been downloaded properly, redownloading...\n")
+            new URL(protonX8664Url).withInputStream { i -> protonX8664.withOutputStream { it << i } }
+        }
+    }
+}
+
+tasks.register("prepareKotlinBuildScriptModel"){}
+downloadProton.dependsOn(downloadImageFS)
+preBuild.dependsOn(downloadProton)
+
+android {
+    namespace 'com.winlator.orion'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.winlator.orion"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags ''
+            }
+        }
+
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+
+        vectorDrawables {
+            useSupportLibrary true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        compose true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
+    }
+
+    ndkVersion '27.0.12077973'
+
+    externalNativeBuild {
+        cmake {
+            path 'src/main/cpp/CMakeLists.txt'
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+dependencies {
+    // Compose BOM
+    implementation platform('androidx.compose:compose-bom:2024.09.00')
+    
+    // Material 3
+    implementation 'androidx.compose.material3:material3:1.2.0'
+    implementation 'androidx.compose.material:material-icons-extended'
+    
+    // Compose UI
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    
+    // Compose Activity & ViewModel
+    implementation 'androidx.activity:activity-compose:1.9.2'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.5'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.5'
+    
+    // Navigation Compose
+    implementation 'androidx.navigation:navigation-compose:2.8.0'
+    
+    // Core Kotlin
+    implementation 'androidx.core:core-ktx:1.13.1'
+    
+    // AndroidX Libraries
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
+    
+    // Material Components (for backward compatibility)
+    implementation 'com.google.android.material:material:1.12.0'
+    
+    // Compression Libraries
+    implementation 'com.github.luben:zstd-jni:1.5.2-3@aar'
+    implementation 'org.tukaani:xz:1.9'
+    implementation 'org.apache.commons:commons-compress:1.26.2'
+    
+    // MIDI
+    implementation files('libs/MidiSynth/MidiSynth.jar')
+    
+    // RecyclerView (for non-Compose parts if needed)
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    
+    // Networking
+    implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.google.code.gson:gson:2.11.0'
+    
+    // Security
+    implementation 'org.conscrypt:conscrypt-android:2.5.2'
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+    implementation 'org.openjsse:openjsse:1.1.14'
+    
+    // Image Loading
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    
+    // Unix Socket
+    implementation 'com.kohlschutter.junixsocket:junixsocket-common:2.9.1'
+    implementation 'com.kohlschutter.junixsocket:junixsocket-native-common:2.9.1'
+    
+    // Coil for Compose (modern image loading)
+    implementation 'io.coil-kt:coil-compose:2.7.0'
+    
+    // Debug tools
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+}
