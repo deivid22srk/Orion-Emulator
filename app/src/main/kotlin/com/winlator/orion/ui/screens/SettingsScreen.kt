@@ -13,6 +13,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.preference.PreferenceManager
 import com.winlator.orion.data.GlobalContainer
+import com.winlator.orion.ui.widgets.MultiSelectionDialog
+import com.winlator.orion.ui.widgets.SelectionDialog
+import com.winlator.orion.ui.widgets.SettingClickableItem
+
+private fun parseWinComponents(wincomponents: String): Map<String, Boolean> {
+    val map = mutableMapOf<String, Boolean>()
+    wincomponents.split(",").forEach {
+        val parts = it.split("=")
+        if (parts.size == 2) {
+            map[parts[0]] = parts[1] == "1"
+        }
+    }
+    return map
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +43,11 @@ fun SettingsScreen() {
     var showDXWrapperDialog by remember { mutableStateOf(false) }
     var showBox64PresetDialog by remember { mutableStateOf(false) }
     var showWinVersionDialog by remember { mutableStateOf(false) }
+    var showAudioDriverDialog by remember { mutableStateOf(false) }
+    var showDesktopThemeDialog by remember { mutableStateOf(false) }
+    var showStartupSelectionDialog by remember { mutableStateOf(false) }
+    var showWinComponentsDialog by remember { mutableStateOf(false) }
+    var showPrimaryControllerDialog by remember { mutableStateOf(false) }
 
     fun saveContainer() {
         GlobalContainer.save(context, container)
@@ -65,6 +84,40 @@ fun SettingsScreen() {
             )
         }
         
+        item {
+            OutlinedTextField(
+                value = container.drives,
+                onValueChange = {
+                    container = container.copy(drives = it)
+                    saveContainer()
+                },
+                label = { Text("Drives") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            SettingClickableItem(
+                icon = Icons.Filled.Gamepad,
+                title = "Primary Controller",
+                subtitle = "Controller ${container.primaryController}",
+                onClick = { showPrimaryControllerDialog = true }
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = container.lc_all,
+                onValueChange = {
+                    container = container.copy(lc_all = it)
+                    saveContainer()
+                },
+                label = { Text("LC_ALL") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+
         item {
             SettingSwitchItem(
                 icon = Icons.Filled.Tv,
@@ -130,11 +183,35 @@ fun SettingsScreen() {
         }
 
         item {
+            OutlinedTextField(
+                value = container.graphicsDriverConfig,
+                onValueChange = {
+                    container = container.copy(graphicsDriverConfig = it)
+                    saveContainer()
+                },
+                label = { Text("Graphics Driver Config") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
             SettingClickableItem(
                 icon = Icons.Filled.Layers,
                 title = "DirectX Wrapper",
                 subtitle = container.dxwrapper,
                 onClick = { showDXWrapperDialog = true }
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = container.dxwrapperConfig,
+                onValueChange = {
+                    container = container.copy(dxwrapperConfig = it)
+                    saveContainer()
+                },
+                label = { Text("DX Wrapper Config") },
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
@@ -171,12 +248,100 @@ fun SettingsScreen() {
         }
 
         item {
+            OutlinedTextField(
+                value = container.fexConfig,
+                onValueChange = {
+                    container = container.copy(fexConfig = it)
+                    saveContainer()
+                },
+                label = { Text("FEX Config") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = container.cpuAffinity,
+                onValueChange = {
+                    container = container.copy(cpuAffinity = it)
+                    saveContainer()
+                },
+                label = { Text("CPU Affinity") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = container.cpuListWoW64,
+                onValueChange = {
+                    container = container.copy(cpuListWoW64 = it)
+                    saveContainer()
+                },
+                label = { Text("CPU Affinity (WoW64)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text(
                 "Wine Configuration",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+
+        item {
+            SettingClickableItem(
+                icon = Icons.Filled.Audiotrack,
+                title = "Audio Driver",
+                subtitle = container.audioDriver,
+                onClick = { showAudioDriverDialog = true }
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = container.midiSoundFont,
+                onValueChange = {
+                    container = container.copy(midiSoundFont = it)
+                    saveContainer()
+                },
+                label = { Text("MIDI Soundfont") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            SettingClickableItem(
+                icon = Icons.Filled.Wallpaper,
+                title = "Desktop Theme",
+                subtitle = container.desktopTheme,
+                onClick = { showDesktopThemeDialog = true }
+            )
+        }
+
+        item {
+            SettingClickableItem(
+                icon = Icons.Filled.Extension,
+                title = "Win Components",
+                subtitle = "Select which Windows components to use",
+                onClick = { showWinComponentsDialog = true }
+            )
+        }
+
+        item {
+            SettingClickableItem(
+                icon = Icons.Filled.PlayArrow,
+                title = "Startup Selection",
+                subtitle = when (container.startupSelection.toInt()) {
+                    0 -> "Normal"
+                    1 -> "Essential"
+                    else -> "Aggressive"
+                },
+                onClick = { showStartupSelectionDialog = true }
             )
         }
 
@@ -332,7 +497,91 @@ fun SettingsScreen() {
             onDismiss = { showWinVersionDialog = false }
         )
     }
+
+    if (showAudioDriverDialog) {
+        SelectionDialog(
+            title = "Audio Driver",
+            options = listOf("pulseaudio", "alsa"),
+            selectedOption = container.audioDriver,
+            onSelect = {
+                container = container.copy(audioDriver = it)
+                saveContainer()
+                showAudioDriverDialog = false
+            },
+            onDismiss = { showAudioDriverDialog = false }
+        )
+    }
+
+    if (showDesktopThemeDialog) {
+        SelectionDialog(
+            title = "Desktop Theme",
+            options = listOf("default", "forest", "sunset", "windows"),
+            selectedOption = container.desktopTheme,
+            onSelect = {
+                container = container.copy(desktopTheme = it)
+                saveContainer()
+                showDesktopThemeDialog = false
+            },
+            onDismiss = { showDesktopThemeDialog = false }
+        )
+    }
+
+    if (showStartupSelectionDialog) {
+        SelectionDialog(
+            title = "Startup Selection",
+            options = listOf("Normal", "Essential", "Aggressive"),
+            selectedOption = when (container.startupSelection.toInt()) {
+                0 -> "Normal"
+                1 -> "Essential"
+                else -> "Aggressive"
+            },
+            onSelect = {
+                val selection = when (it) {
+                    "Normal" -> 0
+                    "Essential" -> 1
+                    else -> 2
+                }
+                container = container.copy(startupSelection = selection.toByte())
+                saveContainer()
+                showStartupSelectionDialog = false
+            },
+            onDismiss = { showStartupSelectionDialog = false }
+        )
+    }
+
+    if (showWinComponentsDialog) {
+        val winComponents = remember {
+            parseWinComponents(container.wincomponents)
+        }
+
+        MultiSelectionDialog(
+            title = "Win Components",
+            options = winComponents,
+            onConfirm = {
+                container = container.copy(wincomponents = it.entries.joinToString(",") { entry -> "${entry.key}=${if (entry.value) "1" else "0"}" })
+                saveContainer()
+                showWinComponentsDialog = false
+            },
+            onDismiss = { showWinComponentsDialog = false }
+        )
+    }
+
+    if (showPrimaryControllerDialog) {
+        SelectionDialog(
+            title = "Primary Controller",
+            options = (1..4).map { "Controller $it" },
+            selectedOption = "Controller ${container.primaryController}",
+            onSelect = {
+                val controller = it.substringAfter(" ").toInt()
+                container = container.copy(primaryController = controller)
+                saveContainer()
+                showPrimaryControllerDialog = false
+            },
+            onDismiss = { showPrimaryControllerDialog = false }
+        )
+    }
 }
+
 
 @Composable
 fun SettingSwitchItem(
@@ -374,85 +623,3 @@ fun SettingSwitchItem(
     }
 }
 
-@Composable
-fun SettingClickableItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-fun SelectionDialog(
-    title: String,
-    options: List<String>,
-    selectedOption: String,
-    onSelect: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            LazyColumn {
-                items(options.size) { index ->
-                    val option = options[index]
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(option) }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = option == selectedOption,
-                            onClick = { onSelect(option) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(option)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}

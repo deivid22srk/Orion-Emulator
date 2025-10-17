@@ -16,12 +16,25 @@ data class GlobalContainer(
     val winVersion: String = "win10",
     val showFPS: Boolean = false,
     val enableWineDebug: Boolean = false,
-    val extraEnvVars: String = "",
+    val extraEnvVars: String = "ZINK_DESCRIPTORS=lazy",
     val enableDXVKHud: Boolean = false,
     val enableMangoHud: Boolean = false,
     val cpuAffinity: String = "all",
     val protonVersion: String = "proton-9.0-arm64ec",
-    val useChroot: Boolean = false
+    val useChroot: Boolean = false,
+    val graphicsDriverConfig: String = "vulkanVersion=1.3;version=;blacklistedExtensions=;maxDeviceMemory=0;adrenotoolsTurnip=1;presentMode=mailbox;syncFrame=0;disablePresentWait=0;resourceType=auto;blit=0",
+    val dxwrapperConfig: String = "version=2.3.1,framerate=0,async=0,asyncCache=0,vkd3dVersion=2.12,vkd3dLevel=12_1,ddrawrapper=none,csmt=3,gpuName=NVIDIA GeForce GTX 480,videoMemorySize=2048,strict_shader_math=1,OffscreenRenderingMode=fbo,renderer=gl",
+    val wincomponents: String = "direct3d=1,directsound=0,directmusic=0,directshow=0,directplay=0,xaudio=0,vcrun2010=1",
+    val drives: String = "D:/storage/emulated/0/Download",
+    val startupSelection: Byte = 1,
+    val cpuListWoW64: String = "",
+    val desktopTheme: String = "default",
+    val fexConfig: String = "version=,tsoMode=Fast,x87Mode=1,multiblock=1",
+    val midiSoundFont: String = "",
+    val inputType: Int = 0,
+    val lc_all: String = "",
+    val primaryController: Int = 1,
+    val controllerMapping: String = ""
 ) {
     companion object {
         private const val PREF_KEY = "global_container"
@@ -81,6 +94,10 @@ data class GlobalContainer(
             env["DXVK_HUD"] = "fps,devinfo,memory"
         }
 
+        if (lc_all.isNotBlank()) {
+            env["LC_ALL"] = lc_all
+        }
+
         if (extraEnvVars.isNotBlank()) {
             extraEnvVars.split("\n").forEach { line ->
                 val parts = line.split("=", limit = 2)
@@ -88,6 +105,28 @@ data class GlobalContainer(
                     env[parts[0].trim()] = parts[1].trim()
                 }
             }
+        }
+
+        if (cpuAffinity.isNotBlank()) {
+            env["BOX64_CPUAFFINITY"] = cpuAffinity
+        }
+
+        if (cpuListWoW64.isNotBlank()) {
+            env["BOX86_CPUAFFINITY"] = cpuListWoW64
+        }
+
+        if (fexConfig.isNotBlank()) {
+            val fexConfigFile = File(context.filesDir, ".fex-config")
+            fexConfigFile.writeText(fexConfig)
+            env["FEX_CONFIG"] = fexConfigFile.absolutePath
+        }
+
+        if (dxwrapperConfig.isNotBlank()) {
+            env["DXVK_CONFIG"] = dxwrapperConfig
+        }
+
+        if (audioDriver == "alsa") {
+            env["PULSE_SERVER"] = ""
         }
 
         return env

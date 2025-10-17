@@ -137,25 +137,43 @@ class WineExecutor(private val context: Context) {
             appendLine("mkdir -p \$ROOTFS/root/.wine")
             appendLine("mountpoint -q \$ROOTFS/root/.wine || mount --bind ${containerDir.absolutePath} \$ROOTFS/root/.wine")
             appendLine()
+
+            // Mount user-defined drives
+            container.drives.split(",").forEach { drive ->
+                val parts = drive.split(":")
+                if (parts.size == 2) {
+                    val driveLetter = parts[0]
+                    val drivePath = parts[1]
+                    appendLine("mkdir -p \$ROOTFS/root/.wine/dosdevices/${driveLetter}:")
+                    appendLine("mountpoint -q \$ROOTFS/root/.wine/dosdevices/${driveLetter}: || mount --bind ${drivePath} \$ROOTFS/root/.wine/dosdevices/${driveLetter}:")
+                }
+            }
+
+            appendLine()
             appendLine("# Execute wine inside chroot")
             append("chroot \$ROOTFS /bin/sh -c 'cd /root && ")
-            
+
             if (box64Bin.exists()) {
                 append("/usr/bin/box64 ")
             }
-            
+
             // Wine is installed outside imagefs, so we need to bind mount it
             appendLine("mkdir -p \$ROOTFS/opt/wine")
             appendLine("mountpoint -q \$ROOTFS/opt/wine || mount --bind ${wineBin.parentFile.absolutePath} \$ROOTFS/opt/wine")
             
             append("/opt/wine/wine ")
-            append(config.executablePath)
             
+            if (container.startupSelection.toInt() != 0) {
+                append("start /unix ")
+            }
+
+            append(config.executablePath)
+
             if (config.arguments.isNotBlank()) {
                 append(" ")
                 append(config.arguments)
             }
-            
+
             appendLine("'")
             appendLine()
             appendLine("# Cleanup on exit")
@@ -164,6 +182,14 @@ class WineExecutor(private val context: Context) {
             appendLine("umount \$ROOTFS/dev 2>/dev/null || true")
             appendLine("umount \$ROOTFS/proc 2>/dev/null || true")
             appendLine("umount \$ROOTFS/sys 2>/dev/null || true")
+
+            container.drives.split(",").forEach { drive ->
+                val parts = drive.split(":")
+                if (parts.size == 2) {
+                    val driveLetter = parts[0]
+                    appendLine("umount \$ROOTFS/root/.wine/dosdevices/${driveLetter}: 2>/dev/null || true")
+                }
+            }
         }
         
         scriptFile.writeText(scriptContent)
@@ -220,6 +246,31 @@ class WineExecutor(private val context: Context) {
         
         env["DISPLAY"] = ":0"
         env["WAYLAND_DISPLAY"] = ""
+
+        if (container.graphicsDriverConfig.isNotBlank()) {
+            container.graphicsDriverConfig.split(";").forEach {
+                val parts = it.split("=")
+                if (parts.size == 2) {
+                    env[parts[0]] = parts[1]
+                }
+            }
+        }
+
+        if (container.desktopTheme.isNotBlank()) {
+            val themePath = File(context.filesDir, "themes/${container.desktopTheme}")
+            if (themePath.exists()) {
+                env["WINE_THEME"] = themePath.absolutePath
+            }
+        }
+
+        if (container.midiSoundFont.isNotBlank()) {
+            val soundFontPath = File(context.filesDir, "soundfonts/${container.midiSoundFont}")
+            if (soundFontPath.exists()) {
+                env["WINE_SOUNDFONT"] = soundFontPath.absolutePath
+            }
+        }
+
+        env["WINE_PRIMARY_CONTROLLER"] = container.primaryController.toString()
         
         // Like Winlator Ludashi: use imagefs home
         env["HOME"] = File(imageFSRoot, "home/xuser").absolutePath
@@ -238,7 +289,16 @@ class WineExecutor(private val context: Context) {
 
     private fun buildDllOverrides(container: GlobalContainer): String {
         val overrides = mutableListOf<String>()
-        
+
+        container.wincomponents.split(",").forEach { component ->
+            val parts = component.split("=")
+            if (parts.size == 2) {
+                val name = parts[0]
+                val value = parts[1]
+                overrides.add("$name=${if (value == "1") "n,b" else "b"}")
+            }
+        }
+
         when (container.dxwrapper) {
             "dxvk-2.3.1", "dxvk-1.10.3" -> {
                 overrides.add("d3d11=n")
@@ -258,7 +318,7 @@ class WineExecutor(private val context: Context) {
                 overrides.add("dxgi=b")
             }
         }
-        
+
         return overrides.joinToString(";")
     }
 

@@ -56,6 +56,12 @@ class ContainerManager(private val context: Context) {
             callback.onProgress(95, "Finalizing installation...")
             finalizeInstallation()
 
+            callback.onProgress(98, "Installing themes...")
+            extractComponent("themes.tzst", File(context.filesDir, "themes"))
+
+            callback.onProgress(99, "Installing soundfonts...")
+            extractComponent("soundfonts.tzst", File(context.filesDir, "soundfonts"))
+
             callback.onProgress(100, "Installation complete!")
             callback.onComplete()
 
