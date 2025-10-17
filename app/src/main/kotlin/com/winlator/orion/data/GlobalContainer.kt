@@ -47,14 +47,19 @@ data class GlobalContainer(
     fun getEnvVars(context: Context): Map<String, String> {
         val env = mutableMapOf<String, String>()
 
-        env["WINEPREFIX"] = com.winlator.orion.core.FileUtils.getContainerDir(context).absolutePath
+        val imageFSRoot = File(context.filesDir, "imagefs")
+        val winePrefixPath = File(imageFSRoot, "home/xuser/.wine").absolutePath
+        
+        env["WINEPREFIX"] = winePrefixPath
         env["WINEDEBUG"] = if (enableWineDebug) "+all" else "-all"
         env["WINEARCH"] = "win64"
         env["WINESERVER"] = File(context.filesDir, "proton/bin/wineserver").absolutePath
         env["WINE"] = File(context.filesDir, "proton/bin/wine").absolutePath
 
         env["BOX64_LOG"] = if (enableWineDebug) "1" else "0"
+        env["BOX64_NOBANNER"] = if (enableWineDebug) "0" else "1"
         env["BOX64_SHOWSEGV"] = "0"
+        env["BOX64_DYNAREC"] = "1"
         env["BOX64_DYNAREC_STRONGMEM"] = when (box64Preset) {
             "performance" -> "0"
             "compatibility" -> "2"
@@ -69,6 +74,8 @@ data class GlobalContainer(
         env["mesa_glthread"] = "true"
         env["MESA_GL_VERSION_OVERRIDE"] = "4.6"
         env["MESA_GLSL_VERSION_OVERRIDE"] = "460"
+        env["MESA_SHADER_CACHE_DISABLE"] = "false"
+        env["MESA_SHADER_CACHE_MAX_SIZE"] = "512MB"
 
         if (enableDXVKHud) {
             env["DXVK_HUD"] = "fps,devinfo,memory"

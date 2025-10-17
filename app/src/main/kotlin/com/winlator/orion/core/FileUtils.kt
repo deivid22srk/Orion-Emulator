@@ -139,10 +139,15 @@ object FileUtils {
 
     fun chmod(file: File, permissions: String): Boolean {
         return try {
-            Runtime.getRuntime().exec("chmod $permissions ${file.absolutePath}").waitFor() == 0
+            android.system.Os.chmod(file.absolutePath, Integer.parseInt(permissions, 8))
+            true
         } catch (e: Exception) {
             android.util.Log.e("FileUtils", "Failed to chmod: ${file.path}", e)
-            false
+            try {
+                Runtime.getRuntime().exec("chmod $permissions ${file.absolutePath}").waitFor() == 0
+            } catch (ex: Exception) {
+                false
+            }
         }
     }
 

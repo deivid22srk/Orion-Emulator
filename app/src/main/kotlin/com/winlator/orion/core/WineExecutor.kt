@@ -25,22 +25,22 @@ class WineExecutor(private val context: Context) {
             Log.i(TAG, "Executing: ${config.executablePath}")
             Log.i(TAG, "Arguments: ${config.arguments}")
             Log.i(TAG, "Working Directory: ${config.workingDirectory ?: "default"}")
+            Log.i(TAG, "Use Chroot: ${container.useChroot}")
 
-            val workDir = if (config.workingDirectory != null) {
-                File(config.workingDirectory)
-            } else {
-                val containerDir = FileUtils.getContainerDir(context)
-                File(containerDir, "drive_c")
+            val imageFSRoot = File(context.filesDir, "imagefs")
+            val workDir = File(imageFSRoot, "home/xuser")
+            
+            // Ensure working directory exists
+            if (!workDir.exists()) {
+                workDir.mkdirs()
+                FileUtils.chmod(workDir, "755")
             }
 
-            val command = buildCommand(config, container, env)
+            val command = buildCommand(config, container)
             
-            if (container.enableWineDebug) {
-                val logFile = getWineLogFile()
-                Log.i(TAG, "Wine logs will be saved to: ${logFile.absolutePath}")
-            }
+            Log.i(TAG, "Command: ${command.joinToString(" ")}")
+            Log.i(TAG, "Working directory: ${workDir.absolutePath}")
             
-            // Execute command via ProcessBuilder
             val processBuilder = ProcessBuilder(command)
             processBuilder.directory(workDir)
             processBuilder.environment().putAll(env)
@@ -49,8 +49,10 @@ class WineExecutor(private val context: Context) {
                 val logFile = getWineLogFile()
                 processBuilder.redirectErrorStream(true)
                 processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+                Log.i(TAG, "Wine logs will be saved to: ${logFile.absolutePath}")
             } else {
                 processBuilder.redirectErrorStream(true)
+                processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(File("/dev/null")))
             }
             
             val process = processBuilder.start()
@@ -68,169 +70,108 @@ class WineExecutor(private val context: Context) {
         }
     }
 
-    private fun buildCommand(config: ExecutionConfig, container: GlobalContainer, env: Map<String, String>): List<String> {
+    private fun buildCommand(config: ExecutionConfig, container: GlobalContainer): List<String> {
         val commands = mutableListOf<String>()
         
         val imageFSRoot = File(context.filesDir, "imagefs")
-        val box64Bin = File(context.filesDir, "box64/bin/box64")
-        val wineBin = File(context.filesDir, "proton/bin/wine")
-        val containerDir = FileUtils.getContainerDir(context)
+        val nativeLibDir = File(context.applicationInfo.nativeLibraryDir)
         
-        // Check if user wants to use chroot (requires root) or proot
         if (container.useChroot) {
-            Log.i(TAG, "Using chroot (requires root access)")
+            Log.i(TAG, "Mode: Chroot (requires root)")
             
-            // Use a wrapper script for chroot
-            val chrootScript = createChrootScript(
-                imageFSRoot,
-                containerDir,
-                box64Bin,
-                wineBin,
-                config,
-                env
-            )
+            // Create a script that will be executed with su
+            val scriptFile = createChrootScript(imageFSRoot, config, container)
             
             commands.add("su")
             commands.add("-c")
-            commands.add(chrootScript.absolutePath)
-            
+            commands.add("sh ${scriptFile.absolutePath}")
         } else {
-            // Use PRoot via JNI (no root required)
-            Log.i(TAG, "Using PRoot via JNI (no root required)")
+            Log.i(TAG, "Mode: Direct execution (using system libraries)")
             
-            // Use a wrapper script that calls PRoot via JNI
-            val prootScript = createPRootScript(
-                imageFSRoot,
-                containerDir,
-                box64Bin,
-                wineBin,
-                config,
-                env
-            )
+            // Build command to execute box64+wine directly
+            // Box64 path
+            val box64 = File(imageFSRoot, "usr/bin/box64")
             
-            commands.add("/system/bin/sh")
-            commands.add(prootScript.absolutePath)
+            // Wine path  
+            val wineBin = File(context.filesDir, "proton/bin/wine")
+            
+            if (box64.exists()) {
+                commands.add(box64.absolutePath)
+            }
+            
+            commands.add(wineBin.absolutePath)
+            commands.add(config.executablePath)
+            
+            if (config.arguments.isNotBlank()) {
+                commands.addAll(config.arguments.split(" ").filter { it.isNotBlank() })
+            }
         }
         
         return commands
     }
     
-    private fun createPRootScript(
-        imageFSRoot: File,
-        containerDir: File,
-        box64Bin: File,
-        wineBin: File,
-        config: ExecutionConfig,
-        env: Map<String, String>
-    ): File {
-        val scriptFile = File(context.cacheDir, "proot_launch_${System.currentTimeMillis()}.sh")
-        
-        val scriptContent = buildString {
-            appendLine("#!/system/bin/sh")
-            appendLine()
-            
-            // Export environment variables
-            env.forEach { (key, value) ->
-                appendLine("export $key='$value'")
-            }
-            appendLine()
-            
-            // Get native library directory
-            val nativeLibDir = context.applicationInfo.nativeLibraryDir
-            val prootBin = "$nativeLibDir/libproot.so"
-            
-            appendLine("# Execute PRoot from native lib directory")
-            append("$prootBin")
-            append(" -r ${imageFSRoot.absolutePath}")
-            append(" -b /dev")
-            append(" -b /proc")
-            append(" -b /sys")
-            append(" -b ${containerDir.absolutePath}:/root/.wine")
-            append(" -w /root")
-            
-            if (box64Bin.exists()) {
-                append(" ${box64Bin.absolutePath}")
-            }
-            
-            append(" ${wineBin.absolutePath}")
-            append(" ${config.executablePath}")
-            
-            if (config.arguments.isNotBlank()) {
-                append(" ${config.arguments}")
-            }
-            
-            appendLine()
-        }
-        
-        scriptFile.writeText(scriptContent)
-        FileUtils.makeExecutable(scriptFile)
-        
-        Log.d(TAG, "Created PRoot script: ${scriptFile.absolutePath}")
-        Log.d(TAG, "Script content:\n$scriptContent")
-        
-        return scriptFile
-    }
-    
     private fun createChrootScript(
         imageFSRoot: File,
-        containerDir: File,
-        box64Bin: File,
-        wineBin: File,
         config: ExecutionConfig,
-        env: Map<String, String>
+        container: GlobalContainer
     ): File {
-        val scriptFile = File(context.cacheDir, "chroot_launch_${System.currentTimeMillis()}.sh")
+        val scriptFile = File(context.cacheDir, "wine_chroot_${System.currentTimeMillis()}.sh")
+        
+        val containerDir = FileUtils.getContainerDir(context)
+        val wineBin = File(context.filesDir, "proton/bin/wine")
+        val box64Bin = File(imageFSRoot, "usr/bin/box64")
         
         val scriptContent = buildString {
             appendLine("#!/system/bin/sh")
+            appendLine("set -e")
             appendLine()
-            appendLine("# Mount necessary filesystems")
-            appendLine("mount -t proc proc ${imageFSRoot.absolutePath}/proc 2>/dev/null || true")
-            appendLine("mount -t sysfs sys ${imageFSRoot.absolutePath}/sys 2>/dev/null || true")
-            appendLine("mount --bind /dev ${imageFSRoot.absolutePath}/dev 2>/dev/null || true")
-            appendLine("mount --bind ${containerDir.absolutePath} ${imageFSRoot.absolutePath}/root/.wine 2>/dev/null || true")
+            appendLine("# Prepare chroot environment")
+            appendLine("ROOTFS='${imageFSRoot.absolutePath}'")
             appendLine()
-            
-            // Export environment variables (will be available inside chroot)
-            env.forEach { (key, value) ->
-                appendLine("export $key='$value'")
-            }
+            appendLine("# Mount filesystems if not already mounted")
+            appendLine("mountpoint -q \$ROOTFS/proc || mount -t proc proc \$ROOTFS/proc")
+            appendLine("mountpoint -q \$ROOTFS/sys || mount -t sysfs sys \$ROOTFS/sys")
+            appendLine("mountpoint -q \$ROOTFS/dev || mount --bind /dev \$ROOTFS/dev")
             appendLine()
-            
-            // Build command to execute inside chroot
-            appendLine("# Execute Wine inside chroot")
-            append("chroot ${imageFSRoot.absolutePath} /bin/sh -c '")
-            append("cd /root && ")
+            appendLine("# Create wine prefix bind mount")
+            appendLine("mkdir -p \$ROOTFS/root/.wine")
+            appendLine("mountpoint -q \$ROOTFS/root/.wine || mount --bind ${containerDir.absolutePath} \$ROOTFS/root/.wine")
+            appendLine()
+            appendLine("# Execute wine inside chroot")
+            append("chroot \$ROOTFS /bin/sh -c 'cd /root && ")
             
             if (box64Bin.exists()) {
-                // Box64 path relative to imagefs root
-                val box64RelPath = box64Bin.absolutePath.removePrefix(imageFSRoot.absolutePath)
-                append("$box64RelPath ")
+                append("/usr/bin/box64 ")
             }
             
-            // Wine path relative to imagefs root
-            val wineRelPath = wineBin.absolutePath.removePrefix(imageFSRoot.absolutePath)
-            append("$wineRelPath ")
+            // Wine is installed outside imagefs, so we need to bind mount it
+            appendLine("mkdir -p \$ROOTFS/opt/wine")
+            appendLine("mountpoint -q \$ROOTFS/opt/wine || mount --bind ${wineBin.parentFile.absolutePath} \$ROOTFS/opt/wine")
+            
+            append("/opt/wine/wine ")
             append(config.executablePath)
             
             if (config.arguments.isNotBlank()) {
-                append(" ${config.arguments}")
+                append(" ")
+                append(config.arguments)
             }
             
             appendLine("'")
             appendLine()
-            appendLine("# Cleanup mounts")
-            appendLine("umount ${imageFSRoot.absolutePath}/dev 2>/dev/null || true")
-            appendLine("umount ${imageFSRoot.absolutePath}/proc 2>/dev/null || true")
-            appendLine("umount ${imageFSRoot.absolutePath}/sys 2>/dev/null || true")
-            appendLine("umount ${imageFSRoot.absolutePath}/root/.wine 2>/dev/null || true")
+            appendLine("# Cleanup on exit")
+            appendLine("umount \$ROOTFS/opt/wine 2>/dev/null || true")
+            appendLine("umount \$ROOTFS/root/.wine 2>/dev/null || true")
+            appendLine("umount \$ROOTFS/dev 2>/dev/null || true")
+            appendLine("umount \$ROOTFS/proc 2>/dev/null || true")
+            appendLine("umount \$ROOTFS/sys 2>/dev/null || true")
         }
         
         scriptFile.writeText(scriptContent)
         FileUtils.makeExecutable(scriptFile)
         
-        Log.d(TAG, "Created chroot script: ${scriptFile.absolutePath}")
-        Log.d(TAG, "Script content:\n$scriptContent")
+        if (container.enableWineDebug) {
+            Log.d(TAG, "Chroot script:\n$scriptContent")
+        }
         
         return scriptFile
     }
@@ -243,15 +184,15 @@ class WineExecutor(private val context: Context) {
         val imageFSRoot = File(context.filesDir, "imagefs")
         
         env["PATH"] = buildString {
-            append(File(context.filesDir, "box64/bin").absolutePath)
-            append(":")
             append(File(context.filesDir, "proton/bin").absolutePath)
             append(":")
             append(File(imageFSRoot, "usr/bin").absolutePath)
             append(":")
             append(File(imageFSRoot, "bin").absolutePath)
             append(":")
-            append(System.getenv("PATH") ?: "")
+            append(File(context.filesDir, "box64/bin").absolutePath)
+            append(":")
+            append(System.getenv("PATH") ?: "/system/bin:/system/xbin")
         }
         
         env["LD_LIBRARY_PATH"] = buildString {
@@ -262,6 +203,8 @@ class WineExecutor(private val context: Context) {
             append(File(imageFSRoot, "usr/lib64").absolutePath)
             append(":")
             append(File(imageFSRoot, "usr/lib").absolutePath)
+            append(":")
+            append("/system/lib64")
         }
         
         env["WINEDLLOVERRIDES"] = buildDllOverrides(container)
@@ -278,8 +221,17 @@ class WineExecutor(private val context: Context) {
         env["DISPLAY"] = ":0"
         env["WAYLAND_DISPLAY"] = ""
         
-        env["HOME"] = File(FileUtils.getContainerDir(context), "drive_c/users/root").absolutePath
-        env["TMPDIR"] = context.cacheDir.absolutePath
+        // Like Winlator Ludashi: use imagefs home
+        env["HOME"] = File(imageFSRoot, "home/xuser").absolutePath
+        env["USER"] = "xuser"
+        env["TMPDIR"] = File(imageFSRoot, "usr/tmp").absolutePath
+        
+        // Ensure tmp directory exists
+        val tmpDir = File(imageFSRoot, "usr/tmp")
+        if (!tmpDir.exists()) {
+            tmpDir.mkdirs()
+            FileUtils.chmod(tmpDir, "777")
+        }
         
         return env
     }

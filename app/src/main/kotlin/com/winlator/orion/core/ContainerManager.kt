@@ -253,30 +253,43 @@ class ContainerManager(private val context: Context) {
     private fun setupWinePrefixMinimal(containerDir: File, callback: InstallationCallback) {
         callback.onProgress(50, "Creating Wine prefix...")
 
-        // Criar estrutura mínima sem extrair pattern completo
-        val driveC = File(containerDir, "drive_c")
-        val dosDevices = File(containerDir, "dosdevices")
-        val users = File(driveC, "users/root")
+        val imageFSRoot = File(context.filesDir, "imagefs")
+        val winePrefix = File(imageFSRoot, "home/xuser/.wine")
+        val driveC = File(winePrefix, "drive_c")
+        val dosDevices = File(winePrefix, "dosdevices")
+        val users = File(driveC, "users/xuser")
         val programFiles = File(driveC, "Program Files")
         val programFilesX86 = File(driveC, "Program Files (x86)")
         val windows = File(driveC, "windows")
         val system32 = File(windows, "system32")
         val syswow64 = File(windows, "syswow64")
         
-        listOf(driveC, dosDevices, users, programFiles, programFilesX86, windows, system32, syswow64).forEach {
+        listOf(winePrefix, driveC, dosDevices, users, programFiles, programFilesX86, windows, system32, syswow64).forEach {
             it.mkdirs()
+            FileUtils.chmod(it, "755")
         }
         
         callback.onProgress(60, "Configuring Wine prefix...")
         
         // Criar arquivos de configuração básicos
-        val userReg = File(containerDir, "user.reg")
+        val userReg = File(winePrefix, "user.reg")
         if (!userReg.exists()) {
             userReg.writeText("""WINE REGISTRY Version 2
 
 [Software\\Wine] 1234567890
 "Version"="win10"
 """)
+        }
+        
+        // Create symlink for external storage in container dir (backward compatibility)
+        try {
+            if (containerDir.exists()) {
+                Runtime.getRuntime().exec(
+                    arrayOf("ln", "-sf", winePrefix.absolutePath, containerDir.absolutePath + "_link")
+                ).waitFor()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to create compatibility symlink", e)
         }
     }
 
@@ -325,8 +338,9 @@ class ContainerManager(private val context: Context) {
         val container = GlobalContainer.load(context)
         GlobalContainer.save(context, container)
 
-        val containerDir = FileUtils.getContainerDir(context)
-        val dosDevices = File(containerDir, "dosdevices")
+        val imageFSRoot = File(context.filesDir, "imagefs")
+        val winePrefix = File(imageFSRoot, "home/xuser/.wine")
+        val dosDevices = File(winePrefix, "dosdevices")
         
         createDosDevices(dosDevices)
 
@@ -335,23 +349,29 @@ class ContainerManager(private val context: Context) {
     }
 
     private fun createDosDevices(dosDevices: File) {
-        dosDevices.mkdirs()
+        // dosDevices is already created in setupWinePrefixMinimal
+        // This function is now for backward compatibility
+        val imageFSRoot = File(context.filesDir, "imagefs")
+        val winePrefix = File(imageFSRoot, "home/xuser/.wine")
+        val dosDevicesDir = File(winePrefix, "dosdevices")
+        
+        dosDevicesDir.mkdirs()
 
-        val cDrive = File(dosDevices, "c:")
-        val containerDriveC = File(FileUtils.getContainerDir(context), "drive_c")
+        val cDrive = File(dosDevicesDir, "c:")
+        val driveC = File(winePrefix, "drive_c")
         
         if (!cDrive.exists()) {
             try {
                 Runtime.getRuntime().exec(
-                    arrayOf("ln", "-s", containerDriveC.absolutePath, cDrive.absolutePath)
+                    arrayOf("ln", "-s", driveC.absolutePath, cDrive.absolutePath)
                 ).waitFor()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create C: drive symlink", e)
             }
         }
 
-        val zDrive = File(dosDevices, "z:")
-        val rootDir = File("/")
+        val zDrive = File(dosDevicesDir, "z:")
+        val rootDir = imageFSRoot
         
         if (!zDrive.exists()) {
             try {
@@ -365,7 +385,7 @@ class ContainerManager(private val context: Context) {
     }
 
     private fun setExecutablePermissions() {
-        // Copy proot from native libs to imagefs
+        // Copy proot from native libs to imagefs (optional, for future use)
         installPRoot()
         
         val binDirs = listOf(
@@ -380,9 +400,27 @@ class ContainerManager(private val context: Context) {
                 binDir.listFiles()?.forEach { file ->
                     if (file.isFile) {
                         FileUtils.makeExecutable(file)
+                        Log.d(TAG, "Made executable: ${file.absolutePath}")
                     }
                 }
+            } else {
+                Log.w(TAG, "Binary directory doesn't exist: ${binDir.absolutePath}")
             }
+        }
+        
+        // Create home directory structure
+        val imageFSRoot = File(context.filesDir, "imagefs")
+        val homeXuser = File(imageFSRoot, "home/xuser")
+        if (!homeXuser.exists()) {
+            homeXuser.mkdirs()
+            FileUtils.chmod(homeXuser, "755")
+        }
+        
+        // Create tmp directory
+        val tmpDir = File(imageFSRoot, "usr/tmp")
+        if (!tmpDir.exists()) {
+            tmpDir.mkdirs()
+            FileUtils.chmod(tmpDir, "777")
         }
     }
     
