@@ -7,6 +7,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.tukaani.xz.XZInputStream
 import java.io.*
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 object TarCompressorUtils {
     private const val TAG = "TarCompressorUtils"

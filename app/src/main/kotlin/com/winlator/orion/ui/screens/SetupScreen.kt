@@ -111,8 +111,8 @@ fun SetupScreen(onSetupComplete: () -> Unit) {
                             isInstalling = true
                             scope.launch {
                                 containerManager.install(object : ContainerManager.InstallationCallback {
-                                    override fun onProgress(progress: Int, message: String) {
-                                        this@SetupScreen.progress = progress
+                                    override fun onProgress(progressValue: Int, message: String) {
+                                        progress = progressValue
                                         statusMessage = message
                                     }
 
