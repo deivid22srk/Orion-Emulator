@@ -65,15 +65,39 @@ class ContainerManager(private val context: Context) {
         val imageFSAsset = "imagefs.txz"
         val imageFSCache = File(cacheDir, imageFSAsset)
 
-        callback.onProgress(10, "Copying base system...")
+        callback.onProgress(10, "Checking ImageFS...")
+        
+        // Verificar se asset existe
+        val assetExists = try {
+            context.assets.open(imageFSAsset).use { true }
+        } catch (e: Exception) {
+            Log.e(TAG, "ImageFS asset not found in APK", e)
+            callback.onError("ImageFS not found. The APK may be incomplete. Size: ${getApkSize()}")
+            return
+        }
+        
+        if (!assetExists) {
+            callback.onError("ImageFS asset not found in APK")
+            return
+        }
+
+        callback.onProgress(12, "Copying base system...")
         if (!imageFSCache.exists()) {
-            FileUtils.copyFromAssets(context, imageFSAsset, imageFSCache)
+            if (!FileUtils.copyFromAssets(context, imageFSAsset, imageFSCache)) {
+                callback.onError("Failed to copy ImageFS from assets")
+                return
+            }
+        }
+        
+        if (!imageFSCache.exists() || imageFSCache.length() == 0L) {
+            callback.onError("ImageFS file is missing or empty")
+            return
         }
 
         callback.onProgress(15, "Extracting base system...")
         val extractDir = File(context.filesDir, "imagefs")
         
-        TarCompressorUtils.extract(
+        val success = TarCompressorUtils.extract(
             imageFSCache,
             extractDir,
             object : TarCompressorUtils.ProgressCallback {
@@ -87,6 +111,10 @@ class ContainerManager(private val context: Context) {
                 }
             }
         )
+        
+        if (!success) {
+            callback.onError("Failed to extract ImageFS")
+        }
     }
 
     private fun extractProton(callback: InstallationCallback) {
@@ -95,15 +123,39 @@ class ContainerManager(private val context: Context) {
         val protonAsset = "$protonVersion.txz"
         val protonCache = File(FileUtils.getCacheDir(context), protonAsset)
 
-        callback.onProgress(30, "Copying Proton Wine...")
+        callback.onProgress(30, "Checking Proton Wine...")
+        
+        // Verificar se asset existe
+        val assetExists = try {
+            context.assets.open(protonAsset).use { true }
+        } catch (e: Exception) {
+            Log.e(TAG, "Proton asset not found: $protonAsset", e)
+            callback.onError("Proton Wine ($protonVersion) not found in APK. Available assets: ${listAssets()}")
+            return
+        }
+        
+        if (!assetExists) {
+            callback.onError("Proton asset not found: $protonAsset")
+            return
+        }
+
+        callback.onProgress(32, "Copying Proton Wine...")
         if (!protonCache.exists()) {
-            FileUtils.copyFromAssets(context, protonAsset, protonCache)
+            if (!FileUtils.copyFromAssets(context, protonAsset, protonCache)) {
+                callback.onError("Failed to copy Proton from assets")
+                return
+            }
+        }
+        
+        if (!protonCache.exists() || protonCache.length() == 0L) {
+            callback.onError("Proton file is missing or empty")
+            return
         }
 
         callback.onProgress(35, "Extracting Proton Wine...")
         val protonDir = File(context.filesDir, "proton")
 
-        TarCompressorUtils.extract(
+        val success = TarCompressorUtils.extract(
             protonCache,
             protonDir,
             object : TarCompressorUtils.ProgressCallback {
@@ -117,6 +169,10 @@ class ContainerManager(private val context: Context) {
                 }
             }
         )
+        
+        if (!success) {
+            callback.onError("Failed to extract Proton Wine")
+        }
     }
 
     private fun setupWinePrefix(containerDir: File, callback: InstallationCallback) {
@@ -270,6 +326,24 @@ class ContainerManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Uninstallation failed", e)
             callback.onError("Uninstall failed: ${e.message}")
+        }
+    }
+    
+    private fun listAssets(): String {
+        return try {
+            context.assets.list("")?.joinToString(", ") ?: "none"
+        } catch (e: Exception) {
+            "error listing assets"
+        }
+    }
+    
+    private fun getApkSize(): String {
+        return try {
+            val apkPath = context.packageCodePath
+            val size = File(apkPath).length()
+            FileUtils.formatFileSize(size)
+        } catch (e: Exception) {
+            "unknown"
         }
     }
 }

@@ -12,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.winlator.orion.core.ContainerManager
 import com.winlator.orion.data.AppShortcut
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,6 +22,14 @@ fun ShortcutsScreen(onLaunchApp: (String, String, String) -> Unit) {
     val context = LocalContext.current
     var shortcuts by remember { mutableStateOf(AppShortcut.loadAll(context)) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var showNotInstalledDialog by remember { mutableStateOf(false) }
+    
+    val containerManager = remember { com.winlator.orion.core.ContainerManager(context) }
+    var isInstalled by remember { mutableStateOf<Boolean?>(null) }
+    
+    LaunchedEffect(Unit) {
+        isInstalled = containerManager.isInstalled()
+    }
 
     val defaultShortcuts = remember {
         listOf(
@@ -111,7 +121,11 @@ fun ShortcutsScreen(onLaunchApp: (String, String, String) -> Unit) {
                 DefaultShortcutCard(
                     shortcut = shortcut,
                     onClick = {
-                        onLaunchApp(shortcut.executable, shortcut.arguments, shortcut.title)
+                        if (isInstalled == true) {
+                            onLaunchApp(shortcut.executable, shortcut.arguments, shortcut.title)
+                        } else {
+                            showNotInstalledDialog = true
+                        }
                     }
                 )
             }
@@ -131,7 +145,11 @@ fun ShortcutsScreen(onLaunchApp: (String, String, String) -> Unit) {
                     CustomShortcutCard(
                         shortcut = shortcut,
                         onClick = {
-                            onLaunchApp(shortcut.path, shortcut.arguments, shortcut.name)
+                            if (isInstalled == true) {
+                                onLaunchApp(shortcut.path, shortcut.arguments, shortcut.name)
+                            } else {
+                                showNotInstalledDialog = true
+                            }
                         },
                         onDelete = {
                             AppShortcut.remove(context, shortcut.id)
@@ -156,6 +174,22 @@ fun ShortcutsScreen(onLaunchApp: (String, String, String) -> Unit) {
                 AppShortcut.add(context, newShortcut)
                 shortcuts = AppShortcut.loadAll(context)
                 showAddDialog = false
+            }
+        )
+    }
+    
+    if (showNotInstalledDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotInstalledDialog = false },
+            icon = { Icon(Icons.Filled.Error, contentDescription = null) },
+            title = { Text("Installation Required") },
+            text = { 
+                Text("Wine and its components are not installed yet. Please complete the setup process first.")
+            },
+            confirmButton = {
+                Button(onClick = { showNotInstalledDialog = false }) {
+                    Text("OK")
+                }
             }
         )
     }
