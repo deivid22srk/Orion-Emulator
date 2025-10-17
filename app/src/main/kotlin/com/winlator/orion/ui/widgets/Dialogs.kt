@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.AlertDialog
@@ -81,8 +82,7 @@ fun SelectionDialog(
         title = { Text(title) },
         text = {
             LazyColumn {
-                items(options.size) { index ->
-                    val option = options[index]
+                items(options) { option ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
