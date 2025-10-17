@@ -24,6 +24,7 @@ add_library(winlator SHARED
         winlator/xconnector_epoll.c
         winlator/alsa_client.c
         winlator/patchelf_wrapper.cpp
+        winlator/proot_wrapper.cpp
         winlator/vulkan.cpp
         adrenotools/src/bcenabler.cpp
         adrenotools/src/driver.cpp

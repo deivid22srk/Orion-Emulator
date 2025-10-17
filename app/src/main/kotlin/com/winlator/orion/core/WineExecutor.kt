@@ -33,8 +33,14 @@ class WineExecutor(private val context: Context) {
                 File(containerDir, "drive_c")
             }
 
-            val command = buildCommand(config, container)
+            val command = buildCommand(config, container, env)
             
+            if (container.enableWineDebug) {
+                val logFile = getWineLogFile()
+                Log.i(TAG, "Wine logs will be saved to: ${logFile.absolutePath}")
+            }
+            
+            // Execute command via ProcessBuilder
             val processBuilder = ProcessBuilder(command)
             processBuilder.directory(workDir)
             processBuilder.environment().putAll(env)
@@ -43,7 +49,6 @@ class WineExecutor(private val context: Context) {
                 val logFile = getWineLogFile()
                 processBuilder.redirectErrorStream(true)
                 processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
-                Log.i(TAG, "Wine logs will be saved to: ${logFile.absolutePath}")
             } else {
                 processBuilder.redirectErrorStream(true)
             }
@@ -63,80 +68,171 @@ class WineExecutor(private val context: Context) {
         }
     }
 
-    private fun buildCommand(config: ExecutionConfig, container: GlobalContainer): List<String> {
+    private fun buildCommand(config: ExecutionConfig, container: GlobalContainer, env: Map<String, String>): List<String> {
         val commands = mutableListOf<String>()
         
         val imageFSRoot = File(context.filesDir, "imagefs")
         val box64Bin = File(context.filesDir, "box64/bin/box64")
         val wineBin = File(context.filesDir, "proton/bin/wine")
+        val containerDir = FileUtils.getContainerDir(context)
         
         // Check if user wants to use chroot (requires root) or proot
         if (container.useChroot) {
             Log.i(TAG, "Using chroot (requires root access)")
+            
+            // Use a wrapper script for chroot
+            val chrootScript = createChrootScript(
+                imageFSRoot,
+                containerDir,
+                box64Bin,
+                wineBin,
+                config,
+                env
+            )
+            
             commands.add("su")
             commands.add("-c")
+            commands.add(chrootScript.absolutePath)
             
-            // Build chroot command as a single string
-            val chrootCmd = buildString {
-                append("chroot ")
-                append(imageFSRoot.absolutePath)
-                append(" /bin/sh -c '")
-                append("mount -t proc proc /proc 2>/dev/null || true && ")
-                append("mount -t sysfs sys /sys 2>/dev/null || true && ")
-                append("mount -o bind /dev /dev 2>/dev/null || true && ")
-                append("cd /root && ")
-                if (box64Bin.exists()) {
-                    append(box64Bin.absolutePath.replace(imageFSRoot.absolutePath, ""))
-                    append(" ")
-                }
-                append(wineBin.absolutePath.replace(imageFSRoot.absolutePath, ""))
-                append(" ")
-                append(config.executablePath)
-                if (config.arguments.isNotBlank()) {
-                    append(" ")
-                    append(config.arguments)
-                }
-                append("'")
-            }
-            commands.add(chrootCmd)
         } else {
-            // Use PRoot (no root required)
-            val prootBin = File(imageFSRoot, "usr/bin/proot")
+            // Use PRoot via JNI (no root required)
+            Log.i(TAG, "Using PRoot via JNI (no root required)")
             
-            if (prootBin.exists()) {
-                Log.i(TAG, "Using PRoot (no root required)")
-                commands.add(prootBin.absolutePath)
-                commands.add("-r")
-                commands.add(imageFSRoot.absolutePath)
-                commands.add("-b")
-                commands.add("/dev")
-                commands.add("-b")
-                commands.add("/proc")
-                commands.add("-b")
-                commands.add("/sys")
-                commands.add("-b")
-                commands.add(FileUtils.getContainerDir(context).absolutePath + ":/root/.wine")
-                commands.add("-w")
-                commands.add("/root")
-                
-                if (box64Bin.exists()) {
-                    commands.add(box64Bin.absolutePath)
-                }
-                
-                commands.add(wineBin.absolutePath)
-                commands.add(config.executablePath)
-                
-                if (config.arguments.isNotBlank()) {
-                    commands.addAll(config.arguments.split(" ").filter { it.isNotBlank() })
-                }
-            } else {
-                Log.e(TAG, "PRoot not found at ${prootBin.absolutePath}")
-                Log.e(TAG, "Cannot run Wine without PRoot or chroot. Please reinstall or enable chroot in settings.")
-                throw IllegalStateException("PRoot not found. Please reinstall the application or enable chroot (requires root) in settings.")
-            }
+            // Use a wrapper script that calls PRoot via JNI
+            val prootScript = createPRootScript(
+                imageFSRoot,
+                containerDir,
+                box64Bin,
+                wineBin,
+                config,
+                env
+            )
+            
+            commands.add("/system/bin/sh")
+            commands.add(prootScript.absolutePath)
         }
         
         return commands
+    }
+    
+    private fun createPRootScript(
+        imageFSRoot: File,
+        containerDir: File,
+        box64Bin: File,
+        wineBin: File,
+        config: ExecutionConfig,
+        env: Map<String, String>
+    ): File {
+        val scriptFile = File(context.cacheDir, "proot_launch_${System.currentTimeMillis()}.sh")
+        
+        val scriptContent = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine()
+            
+            // Export environment variables
+            env.forEach { (key, value) ->
+                appendLine("export $key='$value'")
+            }
+            appendLine()
+            
+            // Get native library directory
+            val nativeLibDir = context.applicationInfo.nativeLibraryDir
+            val prootBin = "$nativeLibDir/libproot.so"
+            
+            appendLine("# Execute PRoot from native lib directory")
+            append("$prootBin")
+            append(" -r ${imageFSRoot.absolutePath}")
+            append(" -b /dev")
+            append(" -b /proc")
+            append(" -b /sys")
+            append(" -b ${containerDir.absolutePath}:/root/.wine")
+            append(" -w /root")
+            
+            if (box64Bin.exists()) {
+                append(" ${box64Bin.absolutePath}")
+            }
+            
+            append(" ${wineBin.absolutePath}")
+            append(" ${config.executablePath}")
+            
+            if (config.arguments.isNotBlank()) {
+                append(" ${config.arguments}")
+            }
+            
+            appendLine()
+        }
+        
+        scriptFile.writeText(scriptContent)
+        FileUtils.makeExecutable(scriptFile)
+        
+        Log.d(TAG, "Created PRoot script: ${scriptFile.absolutePath}")
+        Log.d(TAG, "Script content:\n$scriptContent")
+        
+        return scriptFile
+    }
+    
+    private fun createChrootScript(
+        imageFSRoot: File,
+        containerDir: File,
+        box64Bin: File,
+        wineBin: File,
+        config: ExecutionConfig,
+        env: Map<String, String>
+    ): File {
+        val scriptFile = File(context.cacheDir, "chroot_launch_${System.currentTimeMillis()}.sh")
+        
+        val scriptContent = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine()
+            appendLine("# Mount necessary filesystems")
+            appendLine("mount -t proc proc ${imageFSRoot.absolutePath}/proc 2>/dev/null || true")
+            appendLine("mount -t sysfs sys ${imageFSRoot.absolutePath}/sys 2>/dev/null || true")
+            appendLine("mount --bind /dev ${imageFSRoot.absolutePath}/dev 2>/dev/null || true")
+            appendLine("mount --bind ${containerDir.absolutePath} ${imageFSRoot.absolutePath}/root/.wine 2>/dev/null || true")
+            appendLine()
+            
+            // Export environment variables (will be available inside chroot)
+            env.forEach { (key, value) ->
+                appendLine("export $key='$value'")
+            }
+            appendLine()
+            
+            // Build command to execute inside chroot
+            appendLine("# Execute Wine inside chroot")
+            append("chroot ${imageFSRoot.absolutePath} /bin/sh -c '")
+            append("cd /root && ")
+            
+            if (box64Bin.exists()) {
+                // Box64 path relative to imagefs root
+                val box64RelPath = box64Bin.absolutePath.removePrefix(imageFSRoot.absolutePath)
+                append("$box64RelPath ")
+            }
+            
+            // Wine path relative to imagefs root
+            val wineRelPath = wineBin.absolutePath.removePrefix(imageFSRoot.absolutePath)
+            append("$wineRelPath ")
+            append(config.executablePath)
+            
+            if (config.arguments.isNotBlank()) {
+                append(" ${config.arguments}")
+            }
+            
+            appendLine("'")
+            appendLine()
+            appendLine("# Cleanup mounts")
+            appendLine("umount ${imageFSRoot.absolutePath}/dev 2>/dev/null || true")
+            appendLine("umount ${imageFSRoot.absolutePath}/proc 2>/dev/null || true")
+            appendLine("umount ${imageFSRoot.absolutePath}/sys 2>/dev/null || true")
+            appendLine("umount ${imageFSRoot.absolutePath}/root/.wine 2>/dev/null || true")
+        }
+        
+        scriptFile.writeText(scriptContent)
+        FileUtils.makeExecutable(scriptFile)
+        
+        Log.d(TAG, "Created chroot script: ${scriptFile.absolutePath}")
+        Log.d(TAG, "Script content:\n$scriptContent")
+        
+        return scriptFile
     }
 
     private fun buildEnvironment(container: GlobalContainer): Map<String, String> {
