@@ -63,6 +63,15 @@
             </intent-filter>
         </activity>
 
+        <!-- XServer Display Activity - Full Screen -->
+        <activity
+            android:name="com.winlator.orion.XServerDisplayActivity"
+            android:theme="@style/AppThemeFullscreen"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
+            android:exported="false" />
+
         <!-- FileProvider for sharing files -->
         <provider
             android:name="androidx.core.content.FileProvider"

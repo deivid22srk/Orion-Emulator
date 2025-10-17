@@ -1,5 +1,6 @@
 package com.winlator.orion
 
+import android.content.Intent
 import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
@@ -150,9 +151,8 @@ fun MainScreen() {
     val currentDestination = navBackStackEntry?.destination
     
     val items = listOf(
-        NavigationItem("containers", "Containers", Icons.Filled.Folder),
-        NavigationItem("contents", "Contents", Icons.Filled.Download),
         NavigationItem("shortcuts", "Shortcuts", Icons.Filled.Apps),
+        NavigationItem("contents", "Contents", Icons.Filled.Download),
         NavigationItem("controls", "Controls", Icons.Filled.Gamepad),
         NavigationItem("settings", "Settings", Icons.Filled.Settings)
     )
@@ -193,52 +193,24 @@ fun MainScreen() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = "containers",
+            startDestination = "shortcuts",
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable("containers") { ContainersScreen() }
-            composable("contents") { ContentsScreen() }
             composable("shortcuts") {
                 ShortcutsScreen(
                     onLaunchApp = { executable, arguments, title ->
-                        val encodedExec = URLEncoder.encode(executable, "UTF-8")
-                        val encodedArgs = URLEncoder.encode(arguments, "UTF-8")
-                        val encodedTitle = URLEncoder.encode(title, "UTF-8")
-                        navController.navigate("xserver/$encodedExec/$encodedArgs/$encodedTitle")
+                        val intent = Intent(context, XServerDisplayActivity::class.java).apply {
+                            putExtra("executable", executable)
+                            putExtra("arguments", arguments)
+                            putExtra("title", title)
+                        }
+                        context.startActivity(intent)
                     }
                 )
             }
+            composable("contents") { ContentsScreen() }
             composable("controls") { ControlsScreen() }
             composable("settings") { SettingsScreen() }
-            
-            composable(
-                route = "xserver/{executable}/{arguments}/{title}",
-                arguments = listOf(
-                    navArgument("executable") { type = NavType.StringType },
-                    navArgument("arguments") { type = NavType.StringType },
-                    navArgument("title") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val executable = URLDecoder.decode(
-                    backStackEntry.arguments?.getString("executable") ?: "",
-                    "UTF-8"
-                )
-                val arguments = URLDecoder.decode(
-                    backStackEntry.arguments?.getString("arguments") ?: "",
-                    "UTF-8"
-                )
-                val title = URLDecoder.decode(
-                    backStackEntry.arguments?.getString("title") ?: "",
-                    "UTF-8"
-                )
-                
-                XServerDisplayScreen(
-                    executablePath = executable,
-                    arguments = arguments,
-                    windowTitle = title,
-                    onClose = { navController.popBackStack() }
-                )
-            }
         }
     }
 }

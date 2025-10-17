@@ -1,8 +1,10 @@
 package com.winlator.orion.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -101,48 +103,40 @@ fun ShortcutsScreen(onLaunchApp: (String, String, String) -> Unit) {
             }
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(padding)
         ) {
-            item {
-                Text(
-                    "Wine Applications",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-
-            items(defaultShortcuts) { shortcut ->
-                DefaultShortcutCard(
-                    shortcut = shortcut,
-                    onClick = {
-                        if (isInstalled == true) {
-                            onLaunchApp(shortcut.executable, shortcut.arguments, shortcut.title)
-                        } else {
-                            showNotInstalledDialog = true
+            Text(
+                "Wine Applications",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(16.dp)
+            )
+            
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 160.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(defaultShortcuts) { shortcut ->
+                    DefaultShortcutGridCard(
+                        shortcut = shortcut,
+                        onClick = {
+                            if (isInstalled == true) {
+                                onLaunchApp(shortcut.executable, shortcut.arguments, shortcut.title)
+                            } else {
+                                showNotInstalledDialog = true
+                            }
                         }
-                    }
-                )
-            }
-
-            if (shortcuts.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Custom Shortcuts",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
-
+                
                 items(shortcuts) { shortcut ->
-                    CustomShortcutCard(
+                    CustomShortcutGridCard(
                         shortcut = shortcut,
                         onClick = {
                             if (isInstalled == true) {
@@ -196,22 +190,25 @@ fun ShortcutsScreen(onLaunchApp: (String, String, String) -> Unit) {
 }
 
 @Composable
-fun DefaultShortcutCard(
+fun DefaultShortcutGridCard(
     shortcut: DefaultShortcut,
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f),
         onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 shortcut.icon,
@@ -219,37 +216,19 @@ fun DefaultShortcutCard(
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    shortcut.title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    shortcut.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (shortcut.executable.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        shortcut.executable,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            }
-            Icon(
-                Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            Spacer(Modifier.height(12.dp))
+            Text(
+                shortcut.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                minLines = 2
             )
         }
     }
 }
 
 @Composable
-fun CustomShortcutCard(
+fun CustomShortcutGridCard(
     shortcut: AppShortcut,
     onClick: () -> Unit,
     onDelete: () -> Unit
@@ -257,38 +236,48 @@ fun CustomShortcutCard(
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Filled.Apps,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.secondary
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Filled.Apps,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(Modifier.height(12.dp))
                 Text(
                     shortcut.name,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    shortcut.path,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    minLines = 2
                 )
             }
-            IconButton(onClick = { showDeleteDialog = true }) {
+            
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(32.dp)
+            ) {
                 Icon(
-                    Icons.Filled.Delete,
+                    Icons.Filled.Close,
                     contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

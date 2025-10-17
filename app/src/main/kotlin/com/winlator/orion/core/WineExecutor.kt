@@ -39,11 +39,22 @@ class WineExecutor(private val context: Context) {
             processBuilder.directory(workDir)
             processBuilder.environment().putAll(env)
             
-            processBuilder.redirectErrorStream(true)
+            if (container.enableWineDebug) {
+                val logFile = getWineLogFile()
+                processBuilder.redirectErrorStream(true)
+                processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+                Log.i(TAG, "Wine logs will be saved to: ${logFile.absolutePath}")
+            } else {
+                processBuilder.redirectErrorStream(true)
+            }
             
             val process = processBuilder.start()
             
             Log.i(TAG, "Wine process started with PID: ${getPid(process)}")
+            
+            if (container.enableWineDebug) {
+                monitorProcessOutput(process)
+            }
             
             process
         } catch (e: Exception) {
@@ -227,6 +238,59 @@ class WineExecutor(private val context: Context) {
             exitCode == 0
         } catch (e: Exception) {
             Log.e(TAG, "Failed to kill wineserver", e)
+            false
+        }
+    }
+    
+    private fun getWineLogFile(): File {
+        val logsDir = FileUtils.getLogsDir(context)
+        FileUtils.ensureDirectoryExists(logsDir)
+        
+        val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US)
+            .format(java.util.Date())
+        
+        return File(logsDir, "wine_$timestamp.log")
+    }
+    
+    private fun monitorProcessOutput(process: Process) {
+        Thread {
+            try {
+                process.inputStream.bufferedReader().use { reader ->
+                    reader.lineSequence().forEach { line ->
+                        Log.d(TAG, "Wine: $line")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error monitoring process output", e)
+            }
+        }.start()
+    }
+    
+    suspend fun getRecentLogs(limit: Int = 100): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val logsDir = FileUtils.getLogsDir(context)
+            val logFiles = logsDir.listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
+            
+            if (logFiles.isEmpty()) {
+                return@withContext listOf("No logs available")
+            }
+            
+            val latestLog = logFiles.first()
+            latestLog.readLines().takeLast(limit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read logs", e)
+            listOf("Error reading logs: ${e.message}")
+        }
+    }
+    
+    suspend fun clearLogs(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val logsDir = FileUtils.getLogsDir(context)
+            FileUtils.deleteRecursive(logsDir)
+            FileUtils.ensureDirectoryExists(logsDir)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear logs", e)
             false
         }
     }

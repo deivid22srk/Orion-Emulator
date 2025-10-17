@@ -33,20 +33,17 @@ class ContainerManager(private val context: Context) {
             FileUtils.ensureDirectoryExists(containerDir)
             FileUtils.ensureDirectoryExists(cacheDir)
 
-            callback.onProgress(5, "Extracting base system...")
-            extractImageFS(cacheDir, callback)
-
-            callback.onProgress(25, "Installing Proton Wine...")
+            callback.onProgress(10, "Installing Proton Wine...")
             extractProton(callback)
 
-            callback.onProgress(45, "Setting up Wine prefix...")
-            setupWinePrefix(containerDir, callback)
+            callback.onProgress(40, "Setting up Wine prefix...")
+            setupWinePrefixMinimal(containerDir, callback)
 
-            callback.onProgress(60, "Installing core components...")
-            extractCoreComponents(callback)
+            callback.onProgress(70, "Installing Box64...")
+            extractComponent("box64/box64-0.3.7.tzst", File(context.filesDir, "box64"))
 
-            callback.onProgress(80, "Configuring system...")
-            configureSystem(callback)
+            callback.onProgress(85, "Configuring system...")
+            configureSystemMinimal(callback)
 
             callback.onProgress(95, "Finalizing installation...")
             finalizeInstallation()
@@ -55,6 +52,11 @@ class ContainerManager(private val context: Context) {
             callback.onComplete()
 
             Log.i(TAG, "Installation completed successfully")
+            
+            // Instalar componentes opcionais em background
+            withContext(Dispatchers.Default) {
+                installOptionalComponents()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Installation failed", e)
             callback.onError("Installation failed: ${e.message}")
@@ -174,34 +176,55 @@ class ContainerManager(private val context: Context) {
             callback.onError("Failed to extract Proton Wine")
         }
     }
+    
+    private suspend fun installOptionalComponents() {
+        Log.i(TAG, "Installing optional components in background...")
+        
+        try {
+            // Esses componentes não são necessários para Wine rodar
+            // Serão instalados em background após setup
+            
+            Log.i(TAG, "Installing PulseAudio...")
+            extractComponent("pulseaudio.tzst", File(context.filesDir, "pulseaudio"))
+            
+            Log.i(TAG, "Installing graphics drivers...")
+            val graphicsDir = File(context.filesDir, "graphics_driver")
+            extractComponent("graphics_driver/adrenotools-turnip25.1.0.tzst", graphicsDir)
+            
+            Log.i(TAG, "Optional components installed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install optional components (non-critical)", e)
+        }
+    }
 
-    private fun setupWinePrefix(containerDir: File, callback: InstallationCallback) {
+    private fun setupWinePrefixMinimal(containerDir: File, callback: InstallationCallback) {
         callback.onProgress(50, "Creating Wine prefix...")
 
-        val patternAsset = "container_pattern_common.tzst"
-        val patternCache = File(FileUtils.getCacheDir(context), patternAsset)
-
-        if (!patternCache.exists()) {
-            FileUtils.copyFromAssets(context, patternAsset, patternCache)
+        // Criar estrutura mínima sem extrair pattern completo
+        val driveC = File(containerDir, "drive_c")
+        val dosDevices = File(containerDir, "dosdevices")
+        val users = File(driveC, "users/root")
+        val programFiles = File(driveC, "Program Files")
+        val programFilesX86 = File(driveC, "Program Files (x86)")
+        val windows = File(driveC, "windows")
+        val system32 = File(windows, "system32")
+        val syswow64 = File(windows, "syswow64")
+        
+        listOf(driveC, dosDevices, users, programFiles, programFilesX86, windows, system32, syswow64).forEach {
+            it.mkdirs()
         }
+        
+        callback.onProgress(60, "Configuring Wine prefix...")
+        
+        // Criar arquivos de configuração básicos
+        val userReg = File(containerDir, "user.reg")
+        if (!userReg.exists()) {
+            userReg.writeText("""WINE REGISTRY Version 2
 
-        TarCompressorUtils.extract(
-            patternCache,
-            containerDir,
-            object : TarCompressorUtils.ProgressCallback {
-                override fun onProgress(current: Long, total: Long, currentFile: String) {
-                    val percent = if (total > 0) ((current * 10 / total) + 50).toInt() else 50
-                    callback.onProgress(percent, "Setting up: ${currentFile.substringAfterLast('/')}")
-                }
-
-                override fun onError(error: String) {
-                    Log.e(TAG, "Wine prefix setup error: $error")
-                }
-            }
-        )
-
-        File(containerDir, "dosdevices").mkdirs()
-        File(containerDir, "drive_c").mkdirs()
+[Software\\Wine] 1234567890
+"Version"="win10"
+""")
+        }
     }
 
     private fun extractCoreComponents(callback: InstallationCallback) {
@@ -233,8 +256,8 @@ class ContainerManager(private val context: Context) {
         }
     }
 
-    private fun configureSystem(callback: InstallationCallback) {
-        callback.onProgress(85, "Configuring system...")
+    private fun configureSystemMinimal(callback: InstallationCallback) {
+        callback.onProgress(87, "Configuring system...")
 
         val container = GlobalContainer.load(context)
         GlobalContainer.save(context, container)
