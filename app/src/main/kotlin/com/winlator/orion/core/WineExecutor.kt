@@ -105,7 +105,7 @@ class WineExecutor(private val context: Context) {
     private fun buildEnvironment(container: GlobalContainer): Map<String, String> {
         val env = mutableMapOf<String, String>()
         
-        env.putAll(container.getEnvVars())
+        env.putAll(container.getEnvVars(context))
         
         val imageFSRoot = File(context.filesDir, "imagefs")
         
@@ -223,7 +223,7 @@ class WineExecutor(private val context: Context) {
             }
 
             val container = GlobalContainer.load(context)
-            val env = container.getEnvVars()
+            val env = container.getEnvVars(context)
             
             val processBuilder = ProcessBuilder(
                 wineServerBin.absolutePath,

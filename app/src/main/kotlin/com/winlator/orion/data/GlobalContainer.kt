@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.io.File
 
 data class GlobalContainer(
     val screenSize: String = "1280x720",
@@ -42,14 +43,14 @@ data class GlobalContainer(
         }
     }
 
-    fun getEnvVars(): Map<String, String> {
+    fun getEnvVars(context: Context): Map<String, String> {
         val env = mutableMapOf<String, String>()
 
-        env["WINEPREFIX"] = "/data/data/com.winlator.orion/container"
+        env["WINEPREFIX"] = com.winlator.orion.core.FileUtils.getContainerDir(context).absolutePath
         env["WINEDEBUG"] = if (enableWineDebug) "+all" else "-all"
         env["WINEARCH"] = "win64"
-        env["WINESERVER"] = "/data/data/com.winlator.orion/files/proton/bin/wineserver"
-        env["WINE"] = "/data/data/com.winlator.orion/files/proton/bin/wine"
+        env["WINESERVER"] = File(context.filesDir, "proton/bin/wineserver").absolutePath
+        env["WINE"] = File(context.filesDir, "proton/bin/wine").absolutePath
 
         env["BOX64_LOG"] = if (enableWineDebug) "1" else "0"
         env["BOX64_SHOWSEGV"] = "0"
