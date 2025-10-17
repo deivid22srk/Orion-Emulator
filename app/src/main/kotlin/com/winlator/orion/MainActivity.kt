@@ -28,12 +28,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.preference.PreferenceManager
+import com.winlator.orion.core.ContainerManager
 import com.winlator.orion.ui.screens.*
 import com.winlator.orion.ui.theme.OrionEmulatorTheme
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 
 class MainActivity : ComponentActivity() {
     private lateinit var sharedPreferences: SharedPreferences
     private var isDarkMode by mutableStateOf(false)
+    private var isInstalled by mutableStateOf<Boolean?>(null)
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -110,10 +115,23 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     private fun initializeApp() {
+        val containerManager = ContainerManager(this)
+        
+        GlobalScope.launch {
+            isInstalled = containerManager.isInstalled()
+        }
+        
         setContent {
             OrionEmulatorTheme(darkTheme = isDarkMode) {
-                MainScreen()
+                when (isInstalled) {
+                    null -> LoadingScreen()
+                    false -> SetupScreen(onSetupComplete = {
+                        isInstalled = true
+                    })
+                    true -> MainScreen()
+                }
             }
         }
     }
@@ -178,6 +196,25 @@ fun MainScreen() {
             composable("shortcuts") { ShortcutsScreen() }
             composable("controls") { ControlsScreen() }
             composable("settings") { SettingsScreen() }
+        }
+    }
+}
+
+@Composable
+fun LoadingScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = androidx.compose.ui.Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator()
+            Text(
+                "Loading...",
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
