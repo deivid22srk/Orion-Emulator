@@ -33,7 +33,10 @@ class ContainerManager(private val context: Context) {
             FileUtils.ensureDirectoryExists(containerDir)
             FileUtils.ensureDirectoryExists(cacheDir)
 
-            callback.onProgress(10, "Installing Proton Wine...")
+            callback.onProgress(5, "Installing base system...")
+            extractImageFS(cacheDir, callback)
+
+            callback.onProgress(25, "Installing Proton Wine...")
             extractProton(callback)
 
             callback.onProgress(40, "Setting up Wine prefix...")

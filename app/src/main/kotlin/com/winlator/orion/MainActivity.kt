@@ -2,7 +2,6 @@ package com.winlator.orion
 
 import android.content.Intent
 import android.Manifest
-import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -197,6 +196,7 @@ fun MainScreen() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable("shortcuts") {
+                val context = LocalContext.current
                 ShortcutsScreen(
                     onLaunchApp = { executable, arguments, title ->
                         val intent = Intent(context, XServerDisplayActivity::class.java).apply {
