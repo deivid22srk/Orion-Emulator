@@ -68,7 +68,7 @@ class WineExecutor(private val context: Context) {
         
         val imageFSRoot = File(context.filesDir, "imagefs")
         val box64Bin = File(context.filesDir, "box64/bin/box64")
-        val wineBin = File(context.filesDir, "proton/bin/wine64")
+        val wineBin = File(context.filesDir, "proton/bin/wine")
         
         val prootBin = File(imageFSRoot, "usr/bin/proot")
         

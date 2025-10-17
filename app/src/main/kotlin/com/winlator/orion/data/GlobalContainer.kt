@@ -49,7 +49,7 @@ data class GlobalContainer(
         env["WINEDEBUG"] = if (enableWineDebug) "+all" else "-all"
         env["WINEARCH"] = "win64"
         env["WINESERVER"] = "/data/data/com.winlator.orion/files/proton/bin/wineserver"
-        env["WINE"] = "/data/data/com.winlator.orion/files/proton/bin/wine64"
+        env["WINE"] = "/data/data/com.winlator.orion/files/proton/bin/wine"
 
         env["BOX64_LOG"] = if (enableWineDebug) "1" else "0"
         env["BOX64_SHOWSEGV"] = "0"

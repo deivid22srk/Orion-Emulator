@@ -189,13 +189,13 @@ class ContainerManager(private val context: Context) {
             return
         }
         
-        // Verificar se wine64 foi extraído
-        var wine64 = File(protonDir, "bin/wine64")
-        Log.i(TAG, "Checking wine64: exists=${wine64.exists()}, path=${wine64.absolutePath}")
+        // Verificar se wine foi extraído
+        var wineBinary = File(protonDir, "bin/wine")
+        Log.i(TAG, "Checking wine binary: exists=${wineBinary.exists()}, path=${wineBinary.absolutePath}")
         
-        if (!wine64.exists()) {
+        if (!wineBinary.exists()) {
             // O tar pode ter um diretório raiz, tentar encontrar
-            Log.w(TAG, "wine64 not found at expected location, searching...")
+            Log.w(TAG, "wine not found at expected location, searching...")
             Log.i(TAG, "Proton dir contents: ${protonDir.listFiles()?.joinToString(", ") { it.name } ?: "empty"}")
             
             val rootDirs = protonDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
@@ -214,17 +214,17 @@ class ContainerManager(private val context: Context) {
                 }
                 
                 rootDir.delete()
-                wine64 = File(protonDir, "bin/wine64")
+                wineBinary = File(protonDir, "bin/wine")
             }
             
-            if (!wine64.exists()) {
-                Log.e(TAG, "wine64 still not found after reorganization!")
+            if (!wineBinary.exists()) {
+                Log.e(TAG, "wine still not found after reorganization!")
                 if (File(protonDir, "bin").exists()) {
                     Log.e(TAG, "Proton bin contents: ${File(protonDir, "bin").listFiles()?.joinToString(", ") { it.name } ?: "empty"}")
                 } else {
                     Log.e(TAG, "bin directory does not exist!")
                 }
-                callback.onError("wine64 binary not found. Archive structure may be incorrect.")
+                callback.onError("wine binary not found. Archive structure may be incorrect.")
                 return
             }
         }
