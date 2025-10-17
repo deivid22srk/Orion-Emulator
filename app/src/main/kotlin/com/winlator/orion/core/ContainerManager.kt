@@ -43,7 +43,10 @@ class ContainerManager(private val context: Context) {
             setupWinePrefixMinimal(containerDir, callback)
 
             callback.onProgress(70, "Installing Box64...")
-            extractComponent("box64/box64-0.3.7.tzst", File(context.filesDir, "box64"))
+            if (!extractComponent("box64/box64-0.3.7.tzst", File(context.filesDir, "box64"))) {
+                callback.onError("Failed to extract Box64")
+                return@withContext
+            }
 
             callback.onProgress(85, "Configuring system...")
             configureSystemMinimal(callback)
@@ -113,6 +116,7 @@ class ContainerManager(private val context: Context) {
 
                 override fun onError(error: String) {
                     Log.e(TAG, "ImageFS extraction error: $error")
+                    callback.onError("ImageFS extraction error: $error")
                 }
             }
         )
@@ -127,6 +131,9 @@ class ContainerManager(private val context: Context) {
         val protonVersion = container.protonVersion
         val protonAsset = "$protonVersion.txz"
         val protonCache = File(FileUtils.getCacheDir(context), protonAsset)
+        
+        Log.i(TAG, "Extracting Proton: version=$protonVersion, asset=$protonAsset")
+        Log.i(TAG, "Proton cache path: ${protonCache.absolutePath}")
 
         callback.onProgress(30, "Checking Proton Wine...")
         
@@ -159,6 +166,7 @@ class ContainerManager(private val context: Context) {
 
         callback.onProgress(35, "Extracting Proton Wine...")
         val protonDir = File(context.filesDir, "proton")
+        Log.i(TAG, "Proton extraction dir: ${protonDir.absolutePath}")
 
         val success = TarCompressorUtils.extract(
             protonCache,
@@ -171,12 +179,54 @@ class ContainerManager(private val context: Context) {
 
                 override fun onError(error: String) {
                     Log.e(TAG, "Proton extraction error: $error")
+                    callback.onError("Proton extraction error: $error")
                 }
             }
         )
         
         if (!success) {
             callback.onError("Failed to extract Proton Wine")
+            return
+        }
+        
+        // Verificar se wine64 foi extraído
+        var wine64 = File(protonDir, "bin/wine64")
+        Log.i(TAG, "Checking wine64: exists=${wine64.exists()}, path=${wine64.absolutePath}")
+        
+        if (!wine64.exists()) {
+            // O tar pode ter um diretório raiz, tentar encontrar
+            Log.w(TAG, "wine64 not found at expected location, searching...")
+            Log.i(TAG, "Proton dir contents: ${protonDir.listFiles()?.joinToString(", ") { it.name } ?: "empty"}")
+            
+            val rootDirs = protonDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+            if (rootDirs.size == 1) {
+                // Tem apenas um diretório raiz, mover conteúdo para cima
+                val rootDir = rootDirs[0]
+                Log.i(TAG, "Found root directory: ${rootDir.name}, moving contents up...")
+                
+                rootDir.listFiles()?.forEach { file ->
+                    val dest = File(protonDir, file.name)
+                    if (file.renameTo(dest)) {
+                        Log.i(TAG, "Moved ${file.name}")
+                    } else {
+                        Log.e(TAG, "Failed to move ${file.name}")
+                    }
+                }
+                
+                rootDir.delete()
+                wine64 = File(protonDir, "bin/wine64")
+            }
+            
+            if (!wine64.exists()) {
+                Log.e(TAG, "wine64 still not found after reorganization!")
+                if (File(protonDir, "bin").exists()) {
+                    Log.e(TAG, "Proton bin contents: ${File(protonDir, "bin").listFiles()?.joinToString(", ") { it.name } ?: "empty"}")
+                } else {
+                    Log.e(TAG, "bin directory does not exist!")
+                }
+                callback.onError("wine64 binary not found. Archive structure may be incorrect.")
+                return
+            }
         }
     }
     
@@ -242,20 +292,30 @@ class ContainerManager(private val context: Context) {
         extractComponent("graphics_driver/adrenotools-turnip25.1.0.tzst", graphicsDir)
     }
 
-    private fun extractComponent(assetPath: String, destinationDir: File) {
-        try {
+    private fun extractComponent(assetPath: String, destinationDir: File): Boolean {
+        return try {
             val componentCache = File(FileUtils.getCacheDir(context), assetPath.substringAfterLast('/'))
             
             if (!componentCache.exists()) {
-                FileUtils.copyFromAssets(context, assetPath, componentCache)
+                if (!FileUtils.copyFromAssets(context, assetPath, componentCache)) {
+                    Log.e(TAG, "Failed to copy asset: $assetPath")
+                    return false
+                }
             }
 
             FileUtils.ensureDirectoryExists(destinationDir)
-            TarCompressorUtils.extract(componentCache, destinationDir)
+            val success = TarCompressorUtils.extract(componentCache, destinationDir)
             
-            Log.i(TAG, "Extracted component: $assetPath")
+            if (success) {
+                Log.i(TAG, "Extracted component: $assetPath")
+            } else {
+                Log.e(TAG, "Failed to extract component: $assetPath")
+            }
+            
+            success
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract component: $assetPath", e)
+            false
         }
     }
 
