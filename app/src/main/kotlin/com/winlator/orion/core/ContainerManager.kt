@@ -445,7 +445,7 @@ class ContainerManager(private val context: Context) {
             
             if (prootSource.exists()) {
                 prootSource.copyTo(prootDest, overwrite = true)
-                FileUtils.makeExecutable(prootDest)
+                Runtime.getRuntime().exec(arrayOf("chmod", "755", prootDest.absolutePath)).waitFor()
                 Log.i(TAG, "PRoot installed successfully to ${prootDest.absolutePath}")
             } else {
                 Log.w(TAG, "PRoot binary not found at ${prootSource.absolutePath}")
