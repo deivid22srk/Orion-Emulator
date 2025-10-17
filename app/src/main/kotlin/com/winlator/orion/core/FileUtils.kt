@@ -151,6 +151,17 @@ object FileUtils {
         }
     }
 
+    fun chmod(file: File, mode: Int): Boolean {
+        return try {
+            val permissions = mode and 0x1FFF
+            android.system.Os.chmod(file.absolutePath, permissions)
+            true
+        } catch (e: Exception) {
+            android.util.Log.w("FileUtils", "Failed to chmod with int mode: ${file.path}, falling back to string method.", e)
+            chmod(file, Integer.toOctalString(mode and 0x1FFF))
+        }
+    }
+
     fun makeExecutable(file: File): Boolean {
         return chmod(file, "755")
     }

@@ -78,9 +78,7 @@ object TarCompressorUtils {
                             tarInput.copyTo(output, bufferSize = 8192)
                         }
 
-                        if (tarEntry.mode and 0x49 != 0) {
-                            FileUtils.makeExecutable(outputFile)
-                        }
+                        FileUtils.chmod(outputFile, tarEntry.mode)
                     } else if (tarEntry.isSymbolicLink) {
                         createSymlink(tarEntry.linkName, outputFile)
                     }

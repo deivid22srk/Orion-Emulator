@@ -43,7 +43,9 @@ class ContainerManager(private val context: Context) {
             setupWinePrefixMinimal(containerDir, callback)
 
             callback.onProgress(70, "Installing Box64...")
-            if (!extractComponent("box64/box64-0.3.7.tzst", File(context.filesDir, "box64"))) {
+            val imageFSRoot = File(context.filesDir, "imagefs")
+            val box64Dir = File(imageFSRoot, "usr/bin")
+            if (!extractComponent("box64/box64-0.3.7.tzst", box64Dir)) {
                 callback.onError("Failed to extract Box64")
                 return@withContext
             }
