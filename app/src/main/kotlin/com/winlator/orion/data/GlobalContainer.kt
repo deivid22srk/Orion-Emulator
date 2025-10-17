@@ -20,7 +20,8 @@ data class GlobalContainer(
     val enableDXVKHud: Boolean = false,
     val enableMangoHud: Boolean = false,
     val cpuAffinity: String = "all",
-    val protonVersion: String = "proton-9.0-arm64ec"
+    val protonVersion: String = "proton-9.0-arm64ec",
+    val useChroot: Boolean = false
 ) {
     companion object {
         private const val PREF_KEY = "global_container"

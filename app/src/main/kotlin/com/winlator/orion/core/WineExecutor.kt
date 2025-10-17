@@ -70,33 +70,70 @@ class WineExecutor(private val context: Context) {
         val box64Bin = File(context.filesDir, "box64/bin/box64")
         val wineBin = File(context.filesDir, "proton/bin/wine")
         
-        val prootBin = File(imageFSRoot, "usr/bin/proot")
-        
-        if (prootBin.exists()) {
-            commands.add(prootBin.absolutePath)
-            commands.add("-r")
-            commands.add(imageFSRoot.absolutePath)
-            commands.add("-b")
-            commands.add("/dev")
-            commands.add("-b")
-            commands.add("/proc")
-            commands.add("-b")
-            commands.add("/sys")
-            commands.add("-b")
-            commands.add(FileUtils.getContainerDir(context).absolutePath + ":/root/.wine")
-            commands.add("-w")
-            commands.add("/root")
-        }
-        
-        if (box64Bin.exists()) {
-            commands.add(box64Bin.absolutePath)
-        }
-        
-        commands.add(wineBin.absolutePath)
-        commands.add(config.executablePath)
-        
-        if (config.arguments.isNotBlank()) {
-            commands.addAll(config.arguments.split(" ").filter { it.isNotBlank() })
+        // Check if user wants to use chroot (requires root) or proot
+        if (container.useChroot) {
+            Log.i(TAG, "Using chroot (requires root access)")
+            commands.add("su")
+            commands.add("-c")
+            
+            // Build chroot command as a single string
+            val chrootCmd = buildString {
+                append("chroot ")
+                append(imageFSRoot.absolutePath)
+                append(" /bin/sh -c '")
+                append("mount -t proc proc /proc 2>/dev/null || true && ")
+                append("mount -t sysfs sys /sys 2>/dev/null || true && ")
+                append("mount -o bind /dev /dev 2>/dev/null || true && ")
+                append("cd /root && ")
+                if (box64Bin.exists()) {
+                    append(box64Bin.absolutePath.replace(imageFSRoot.absolutePath, ""))
+                    append(" ")
+                }
+                append(wineBin.absolutePath.replace(imageFSRoot.absolutePath, ""))
+                append(" ")
+                append(config.executablePath)
+                if (config.arguments.isNotBlank()) {
+                    append(" ")
+                    append(config.arguments)
+                }
+                append("'")
+            }
+            commands.add(chrootCmd)
+        } else {
+            // Use PRoot (no root required)
+            val prootBin = File(imageFSRoot, "usr/bin/proot")
+            
+            if (prootBin.exists()) {
+                Log.i(TAG, "Using PRoot (no root required)")
+                commands.add(prootBin.absolutePath)
+                commands.add("-r")
+                commands.add(imageFSRoot.absolutePath)
+                commands.add("-b")
+                commands.add("/dev")
+                commands.add("-b")
+                commands.add("/proc")
+                commands.add("-b")
+                commands.add("/sys")
+                commands.add("-b")
+                commands.add(FileUtils.getContainerDir(context).absolutePath + ":/root/.wine")
+                commands.add("-w")
+                commands.add("/root")
+                
+                if (box64Bin.exists()) {
+                    commands.add(box64Bin.absolutePath)
+                }
+                
+                commands.add(wineBin.absolutePath)
+                commands.add(config.executablePath)
+                
+                if (config.arguments.isNotBlank()) {
+                    commands.addAll(config.arguments.split(" ").filter { it.isNotBlank() })
+                }
+            } else {
+                Log.e(TAG, "PRoot not found at ${prootBin.absolutePath}")
+                Log.e(TAG, "Cannot run Wine without PRoot or chroot. Please reinstall or enable chroot in settings.")
+                throw IllegalStateException("PRoot not found. Please reinstall the application or enable chroot (requires root) in settings.")
+            }
         }
         
         return commands

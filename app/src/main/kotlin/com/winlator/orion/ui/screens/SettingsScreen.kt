@@ -205,6 +205,29 @@ fun SettingsScreen() {
         item {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text(
+                "Advanced",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+        
+        item {
+            SettingSwitchItem(
+                icon = Icons.Filled.Security,
+                title = "Use Chroot (Requires Root)",
+                subtitle = if (container.useChroot) "Better performance, requires root access" else "Using PRoot (no root required)",
+                checked = container.useChroot,
+                onCheckedChange = {
+                    container = container.copy(useChroot = it)
+                    saveContainer()
+                }
+            )
+        }
+        
+        item {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Text(
                 "About",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,

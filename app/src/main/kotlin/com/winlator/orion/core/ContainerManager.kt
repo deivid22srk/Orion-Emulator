@@ -365,6 +365,9 @@ class ContainerManager(private val context: Context) {
     }
 
     private fun setExecutablePermissions() {
+        // Copy proot from native libs to imagefs
+        installPRoot()
+        
         val binDirs = listOf(
             File(context.filesDir, "imagefs/bin"),
             File(context.filesDir, "imagefs/usr/bin"),
@@ -380,6 +383,29 @@ class ContainerManager(private val context: Context) {
                     }
                 }
             }
+        }
+    }
+    
+    private fun installPRoot() {
+        try {
+            // PRoot is compiled as a native binary
+            val nativeLibDir = File(context.applicationInfo.nativeLibraryDir)
+            val prootSource = File(nativeLibDir, "libproot.so")
+            
+            val imageFsUsrBin = File(context.filesDir, "imagefs/usr/bin")
+            FileUtils.ensureDirectoryExists(imageFsUsrBin)
+            
+            val prootDest = File(imageFsUsrBin, "proot")
+            
+            if (prootSource.exists()) {
+                prootSource.copyTo(prootDest, overwrite = true)
+                FileUtils.makeExecutable(prootDest)
+                Log.i(TAG, "PRoot installed successfully to ${prootDest.absolutePath}")
+            } else {
+                Log.w(TAG, "PRoot binary not found at ${prootSource.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install PRoot (non-critical)", e)
         }
     }
 
