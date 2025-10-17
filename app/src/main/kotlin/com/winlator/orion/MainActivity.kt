@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -89,10 +90,10 @@ class MainActivity : ComponentActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Storage Permission Required")
             .setMessage("This app needs storage permission to function properly.")
-            .setPositiveButton("Grant") { _, _ ->
+            .setPositiveButton("Grant") { dialog, which ->
                 requestPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton("Cancel") { dialog, which ->
                 dialog.dismiss()
                 finish()
             }
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Permission Denied")
             .setMessage("Storage permission is required for this app to work.")
-            .setPositiveButton("OK") { _, _ ->
+            .setPositiveButton("OK") { dialog, which ->
                 finish()
             }
             .show()
