@@ -17,7 +17,7 @@ PFN_vkGetInstanceProcAddr gip;
 static void *vulkan_handle = nullptr;
 
 char *get_native_library_dir(JNIEnv *env, jobject context) {
-    char *native_libdir;
+    char *native_libdir = nullptr;
 
     if (context != nullptr) {
         jclass class_ = env->FindClass("com/winlator/cmod/core/AppUtils");
@@ -33,7 +33,7 @@ char *get_native_library_dir(JNIEnv *env, jobject context) {
 }
 
 char *get_driver_path(JNIEnv *env, jobject context, const char *driver_name) {
-    char *driver_path;
+    char *driver_path = nullptr;
     char *absolute_path;
 
     jclass contextWrapperClass = env->FindClass("android/content/ContextWrapper");
@@ -54,7 +54,7 @@ char *get_driver_path(JNIEnv *env, jobject context, const char *driver_name) {
 }
 
 char *get_library_name(JNIEnv *env, jobject context, const char *driver_name) {
-    char *library_name;
+    char *library_name = nullptr;
 
     jclass adrenotoolsManager = env->FindClass("com/winlator/cmod/contents/AdrenotoolsManager");
     jmethodID constructor = env->GetMethodID(adrenotoolsManager, "<init>", "(Landroid/content/Context;)V");

@@ -6,6 +6,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wno-unused-function -Wimplicit-function
 
 add_subdirectory(OpenXR-SDK)
 add_subdirectory(patchelf)
+add_subdirectory(proot)
 add_subdirectory(adrenotools/lib/linkernsbypass)
 add_subdirectory(adrenotools/src/hook)
 
@@ -23,6 +24,7 @@ add_library(winlator SHARED
         winlator/xconnector_epoll.c
         winlator/alsa_client.c
         winlator/patchelf_wrapper.cpp
+        winlator/proot_wrapper.cpp
         winlator/vulkan.cpp
         adrenotools/src/bcenabler.cpp
         adrenotools/src/driver.cpp

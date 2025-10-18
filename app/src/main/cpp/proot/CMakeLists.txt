@@ -10,6 +10,7 @@ add_library(talloc STATIC
 include_directories(src
                     talloc)
 
+# PRoot main executable (named .so for Android packaging)
 add_executable(libproot.so
                src/cli/cli.c
                src/cli/proot.c

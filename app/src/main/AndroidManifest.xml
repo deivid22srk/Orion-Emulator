@@ -63,11 +63,31 @@
             </intent-filter>
         </activity>
 
+        <!-- XServer Display Activity - Full Screen -->
+        <activity
+            android:name="com.winlator.orion.XServerDisplayActivity"
+            android:theme="@style/AppThemeFullscreen"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
+            android:exported="false" />
+
+        <!-- FileProvider for sharing files -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.winlator.orion.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- TODO: Re-enable these activities/providers after converting Java classes to Kotlin
         <activity
             android:name="com.winlator.cmod.BigPictureActivity"
             android:theme="@style/Theme.AppCompat"
             android:exported="false" />
-
 
         <activity
             android:name="com.winlator.cmod.XServerDisplayActivity"
@@ -120,18 +140,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- FileProvider for sharing files -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="com.winlator.cmod.tileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-
-        <!-- Provider for Winlator’s DocumentProvider or similar usage -->
         <provider
             android:name=".core.WinlatorFilesProvider"
             android:authorities="com.winlator.cmod.core.WinlatorFilesProvider"
@@ -148,6 +156,7 @@
             android:process=":restore_process"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"
             android:exported="true" />
+        -->
 
         <meta-data
             android:name="com.samsung.android.multidisplay.keep_process_alive"
@@ -155,8 +164,6 @@
         <meta-data
             android:name="android.allow_multiple_resumed_activities"
             android:value="true" />
-        >
 
     </application>
 </manifest>
-
